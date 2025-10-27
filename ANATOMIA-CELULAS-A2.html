@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Shooter 3D v2 - Más Robusto</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <!-- Importar A-Frame -->
+    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Arial', sans-serif;
+        }
+
+        a-scene {
+            height: 100%;
+            width: 100%;
+        }
+
+        #ui-layer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 100;
+            pointer-events: none;
+        }
+
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 20px;
+            height: 20px;
+            border: 2px solid white;
+            border-radius: 50%;
+            pointer-events: none;
+        }
+
+        #stats {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            font-size: 1.2em;
+            text-shadow: 2px 2px 4px #000000;
+        }
+
+        /* --- NUEVO: Estilos para el D-Pad --- */
+        #d-pad {
+            position: absolute;
+            bottom: 50px;
+            left: 50px;
+            width: 150px;
+            height: 150px;
+            pointer-events: all; /* Permitir interacción */
+        }
+
+        .dpad-btn {
+            position: absolute;
+            background-color: rgba(255, 255, 255, 0.4);
+            border: 2px solid white;
+            color: white;
+            font-weight: bold;
+            width: 50px;
+            height: 50px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            user-select: none;
+            -webkit-user-select: none;
+            font-size: 20px;
+        }
+        .dpad-btn:active { background-color: rgba(255, 255, 255, 0.7); }
+        #btn-up { top: 0; left: 50px; }
+        #btn-down { bottom: 0; left: 50px; }
+        #btn-left { left: 0; top: 50px; }
+        #btn-right { right: 0; top: 50px; }
+
+        /* --- Estilos para botones de acción (mejorados) --- */
+        .action-btn {
+            position: absolute;
+            pointer-events: all;
+            background-color: rgba(255, 255, 255, 0.3);
+            border: 2px solid white;
+            color: white;
+            font-size: 1em;
+            font-weight: bold;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .action-btn:active { background-color: rgba(255, 255, 255, 0.5); transform: scale(0.95); }
+
+        #fire-btn { bottom: 100px; right: 50px; width: 80px; height: 80px; }
+        #jump-btn { bottom: 200px; right: 40px; width: 60px; height: 60px; }
+        #reload-btn { bottom: 100px; right: 150px; width: 60px; height: 60px; font-size: 0.7em; }
+        
+        /* --- NUEVO: Botón de Pantalla Completa --- */
+        #fullscreen-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            pointer-events: all;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            border: 1px solid white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 0.8em;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ui-layer">
+        <div id="crosshair"></div>
+        <div id="stats">
+            <div>Salud: <span id="health">100</span></div>
+            <div>Munición: <span id="ammo">30</span> / 90</div>
+        </div>
+        
+        <!-- NUEVO: D-Pad para movimiento -->
+        <div id="d-pad">
+            <button id="btn-up" class="dpad-btn">▲</button>
+            <button id="btn-down" class="dpad-btn">▼</button>
+            <button id="btn-left" class="dpad-btn">◄</button>
+            <button id="btn-right" class="dpad-btn">►</button>
+        </div>
+
+        <button id="fire-btn" class="action-btn">DISPARAR</button>
+        <button id="jump-btn" class="action-btn">SALTO</button>
+        <button id="reload-btn" class="action-btn">RECARGAR</button>
+        
+        <!-- NUEVO: Botón de Pantalla Completa -->
+        <button id="fullscreen-btn">Pantalla Completa</button>
+    </div>
+
+    <a-scene>
+        <a-plane position="0 0 0" rotation="-90 0 0" width="20" height="20" color="#7CFC00"></a-plane>
+        <a-sky color="#87CEEB"></a-sky>
+
+        <!-- MODIFICADO: Cubos más cerca y en el campo de visión inicial -->
+        <a-box id="red-cube" position="3 0.5 -3" color="red" class="target"></a-box>
+        <a-box id="purple-cube" position="-3 0.5 -3" color="purple" class="target"></a-box>
+
+        <!-- MODIFICADO: Controles de apuntado simplificados -->
+        <a-camera id="player-camera" position="0 1.6 0" look-controls="pointerLockEnabled: false" wasd-controls="enabled: false"></a-camera>
+    </a-scene>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const scene = document.querySelector('a-scene');
+            const camera = document.querySelector('#player-camera');
+
+            // --- VARIABLES DE ESTADO ---
+            let moveVector = { x: 0, z: 0 };
+            let canShoot = true;
+            let ammo = 30;
+            let maxAmmo = 90;
+            let health = 100;
+
+            // --- REFERENCIAS A ELEMENTOS DEL DOM ---
+            const ammoDisplay = document.querySelector('#ammo');
+            const healthDisplay = document.querySelector('#health');
+            const fireBtn = document.querySelector('#fire-btn');
+            const jumpBtn = document.querySelector('#jump-btn');
+            const reloadBtn = document.querySelector('#reload-btn');
+            const fullscreenBtn = document.querySelector('#fullscreen-btn');
+
+            // --- NUEVO: LÓGICA DE MOVIMIENTO CON D-PAD ---
+            const moveSpeed = 0.1;
+            document.querySelector('#btn-up').addEventListener('touchstart', () => moveVector.z = -moveSpeed);
+            document.querySelector('#btn-down').addEventListener('touchstart', () => moveVector.z = moveSpeed);
+            document.querySelector('#btn-left').addEventListener('touchstart', () => moveVector.x = -moveSpeed);
+            document.querySelector('#btn-right').addEventListener('touchstart', () => moveVector.x = moveSpeed);
+
+            // Detenerse al soltar el botón
+            ['btn-up', 'btn-down', 'btn-left', 'btn-right'].forEach(id => {
+                const btn = document.querySelector(`#${id}`);
+                const stopHandler = () => {
+                    if (id === 'btn-up' || id === 'btn-down') moveVector.z = 0;
+                    if (id === 'btn-left' || id === 'btn-right') moveVector.x = 0;
+                };
+                btn.addEventListener('touchend', stopHandler);
+                // Añadimos mouseup para probar en PC
+                btn.addEventListener('mouseup', stopHandler);
+            });
+            
+            // --- NUEVO: LÓGICA DE APUNTADO SIMPLIFICADA (Drag to Look) ---
+            let isDragging = false;
+            let previousMousePosition = { x: 0, y: 0 };
+
+            scene.addEventListener('mousedown', (e) => { isDragging = true; previousMousePosition = { x: e.clientX, y: e.clientY }; });
+            scene.addEventListener('touchstart', (e) => { isDragging = true; previousMousePosition = { x: e.touches[0].clientX, y: e.touches[0].clientY }; });
+
+            window.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                const deltaMove = { x: e.clientX - previousMousePosition.x, y: e.clientY - previousMousePosition.y };
+                const rotation = camera.getAttribute('rotation');
+                camera.setAttribute('rotation', `${rotation.x - deltaMove.y * 0.5} ${rotation.y + deltaMove.x * 0.5} 0`);
+                previousMousePosition = { x: e.clientX, y: e.clientY };
+            });
+            window.addEventListener('touchmove', (e) => {
+                if (!isDragging) return;
+                const deltaMove = { x: e.touches[0].clientX - previousMousePosition.x, y: e.touches[0].clientY - previousMousePosition.y };
+                const rotation = camera.getAttribute('rotation');
+                camera.setAttribute('rotation', `${rotation.x - deltaMove.y * 0.5} ${rotation.y + deltaMove.x * 0.5} 0`);
+                previousMousePosition = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            });
+
+            window.addEventListener('mouseup', () => isDragging = false);
+            window.addEventListener('touchend', () => isDragging = false);
+
+
+            // --- BUCLE DEL JUEGO (TICK) ---
+            scene.addEventListener('tick', function () {
+                const cameraEl = camera.object3D;
+                // Mover en el espacio local de la cámara
+                const direction = new THREE.Vector3(moveVector.x, 0, moveVector.z);
+                direction.applyQuaternion(cameraEl.quaternion);
+                cameraEl.position.add(direction);
+            });
+
+            // --- LÓGICA DE DISPARO (CORREGIDA) ---
+            function shoot() {
+                if (!canShoot || ammo <= 0) return;
+                console.log("Disparando!"); // Log para depuración
+                canShoot = false;
+                ammo--;
+                updateUI();
+
+                const sphere = document.createElement('a-sphere');
+                sphere.setAttribute('radius', '0.2');
+                sphere.setAttribute('color', 'yellow');
+                const cameraPos = camera.getAttribute('position');
+                sphere.setAttribute('position', cameraPos);
+                scene.appendChild(sphere);
+
+                const direction = new THREE.Vector3();
+                camera.object3D.getWorldDirection(direction);
+                
+                const moveProjectile = setInterval(() => {
+                    const currentPos = sphere.getAttribute('position');
+                    sphere.setAttribute('position', {
+                        x: currentPos.x + direction.x * 0.5,
+                        y: currentPos.y + direction.y * 0.5,
+                        z: currentPos.z + direction.z * 0.5
+                    });
+                    // Lógica de eliminación por distancia
+                    if (Math.abs(currentPos.x) > 50 || Math.abs(currentPos.z) > 50) {
+                        clearInterval(moveProjectile);
+                        sphere.remove();
+                    }
+                }, 16);
+
+                setTimeout(() => { canShoot = true; }, 200);
+            }
+            
+            // CORREGIDO: Eventos más robustos para los botones
+            fireBtn.addEventListener('mousedown', shoot);
+            fireBtn.addEventListener('touchstart', shoot);
+
+            // --- LÓGICA DE SALTO (CORREGIDA) ---
+            function jump() {
+                console.log("Saltando!"); // Log para depuración
+                const currentPos = camera.getAttribute('position');
+                if (currentPos.y <= 1.6) {
+                    let jumpVelocity = 0.3;
+                    const jumpInterval = setInterval(() => {
+                        jumpVelocity -= 0.02;
+                        camera.setAttribute('position.y', camera.getAttribute('position.y') + jumpVelocity);
+                        if (camera.getAttribute('position.y') <= 1.6) {
+                            camera.setAttribute('position.y', 1.6);
+                            clearInterval(jumpInterval);
+                        }
+                    }, 16);
+                }
+            }
+            jumpBtn.addEventListener('mousedown', jump);
+            jumpBtn.addEventListener('touchstart', jump);
+
+            // --- LÓGICA DE RECARGA ---
+            function reload() {
+                console.log("Recargando!");
+                ammo = maxAmmo;
+                updateUI();
+            }
+            reloadBtn.addEventListener('mousedown', reload);
+            reloadBtn.addEventListener('touchstart', reload);
+
+            // --- NUEVO: LÓGICA DE PANTALLA COMPLETA ---
+            fullscreenBtn.addEventListener('click', () => {
+                if (!document.fullscreenElement) {
+                    document.documentElement.requestFullscreen();
+                    fullscreenBtn.textContent = 'Salir de Pantalla Completa';
+                } else {
+                    document.exitFullscreen();
+                    fullscreenBtn.textContent = 'Pantalla Completa';
+                }
+            });
+
+            function updateUI() {
+                ammoDisplay.textContent = ammo;
+                healthDisplay.textContent = health;
+            }
+        });
+    </script>
+</body>
+</html>
