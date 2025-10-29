@@ -2,640 +2,794 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Shooter 3D - COD Mobile</title>
-    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Shooter 3D - Three.js</title>
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-
+        
         body {
-            margin: 0;
             overflow: hidden;
             font-family: Arial, sans-serif;
             touch-action: none;
         }
-
-        #ui-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
+        
+        #canvas {
+            display: block;
             width: 100%;
-            height: 100%;
-            pointer-events: none;
-            z-index: 1000;
+            height: 100vh;
         }
-
-        /* Botón pantalla completa */
-        #fullscreenBtn {
+        
+        .controls {
+            position: fixed;
+            z-index: 100;
+        }
+        
+        /* JOYSTICK ESTÁTICO */
+        .joystick-container {
+            position: fixed;
+            bottom: 80px;
+            left: 50px;
+            width: 140px;
+            height: 140px;
+            z-index: 100;
+        }
+        
+        .joystick-base {
             position: absolute;
-            top: 15px;
-            right: 15px;
-            padding: 15px 25px;
-            background: rgba(0, 0, 0, 0.8);
-            color: white;
-            border: 3px solid #00ff00;
-            border-radius: 10px;
-            cursor: pointer;
-            pointer-events: auto;
-            font-weight: bold;
-            font-size: 16px;
-            z-index: 1002;
-            text-transform: uppercase;
+            width: 140px;
+            height: 140px;
+            background: rgba(100, 100, 100, 0.4);
+            border: 4px solid rgba(255, 255, 255, 0.6);
+            border-radius: 50%;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
         }
-
-        #fullscreenBtn:active {
-            background: rgba(0, 255, 0, 0.5);
-            transform: scale(0.95);
-        }
-
-        /* Controles de movimiento izquierda */
-        #moveControls {
-            position: absolute;
-            left: 30px;
-            bottom: 40px;
-            width: 200px;
-            height: 200px;
-            pointer-events: auto;
-            z-index: 1001;
-        }
-
-        .move-btn {
+        
+        .joystick-stick {
             position: absolute;
             width: 60px;
             height: 60px;
-            background: rgba(255, 255, 255, 0.4);
-            border: 4px solid rgba(255, 255, 255, 0.9);
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 28px;
-            color: white;
-            font-weight: bold;
-            cursor: pointer;
-            user-select: none;
-            touch-action: none;
-        }
-
-        .move-btn:active {
             background: rgba(255, 255, 255, 0.8);
-            transform: scale(0.9);
-        }
-
-        #btnUp {
-            top: 0;
-            left: 70px;
-        }
-
-        #btnDown {
-            bottom: 0;
-            left: 70px;
-        }
-
-        #btnLeft {
-            top: 70px;
-            left: 0;
-        }
-
-        #btnRight {
-            top: 70px;
-            right: 0;
-        }
-
-        /* Controles de acción derecha */
-        #actionControls {
-            position: absolute;
-            right: 30px;
-            bottom: 40px;
-            width: 220px;
-            height: 150px;
-            pointer-events: auto;
-            z-index: 1001;
-        }
-
-        #jumpBtn {
-            position: absolute;
-            left: 0;
-            bottom: 10px;
-            width: 80px;
-            height: 80px;
-            background: rgba(0, 255, 0, 0.5);
-            border: 5px solid rgba(0, 255, 0, 0.9);
+            border: 3px solid rgba(255, 255, 255, 0.9);
             border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: bold;
-            font-size: 13px;
-            cursor: pointer;
-            user-select: none;
-            touch-action: none;
-            text-align: center;
-        }
-
-        #jumpBtn:active {
-            background: rgba(0, 255, 0, 0.8);
-            transform: scale(0.9);
-        }
-
-        #shootBtn {
-            position: absolute;
-            right: 0;
-            bottom: 0;
-            width: 100px;
-            height: 100px;
-            background: rgba(255, 0, 0, 0.5);
-            border: 5px solid rgba(255, 0, 0, 0.9);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: bold;
-            font-size: 14px;
-            cursor: pointer;
-            user-select: none;
-            touch-action: none;
-            text-align: center;
-        }
-
-        #shootBtn:active {
-            background: rgba(255, 0, 0, 0.8);
-            transform: scale(0.9);
-        }
-
-        /* Área de mirar (giroscopio táctil) */
-        #lookArea {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: auto;
-            z-index: 999;
-        }
-
-        /* Crosshair */
-        #crosshair {
-            position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 40px;
-            height: 40px;
-            pointer-events: none;
-            z-index: 1003;
+            transition: all 0.1s ease-out;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
         }
-
-        .crosshair-line {
+        
+        .joystick-stick.active {
+            background: rgba(255, 255, 255, 0.95);
+            box-shadow: 0 3px 12px rgba(0, 0, 0, 0.5);
+        }
+        
+        /* Dead zone visual (opcional, para debug) */
+        .joystick-deadzone {
+            position: absolute;
+            width: 28px;
+            height: 28px;
+            border: 1px dashed rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+        
+        .action-controls {
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            gap: 15px;
+        }
+        
+        .action-btn {
+            width: 90px;
+            height: 90px;
+            border-radius: 50%;
+            border: 4px solid white;
+            font-weight: bold;
+            font-size: 14px;
+            color: white;
+            cursor: pointer;
+            user-select: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            touch-action: none;
+        }
+        
+        #btn-jump {
+            background: rgb(0, 255, 0);
+        }
+        
+        #btn-shoot {
+            background: rgb(200, 100, 50);
+        }
+        
+        .action-btn:active {
+            transform: scale(0.95);
+            opacity: 0.8;
+        }
+        
+        #fullscreen-btn {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.5);
+            color: white;
+            border: 2px solid white;
+            border-radius: 8px;
+            padding: 10px 20px;
+            cursor: pointer;
+            z-index: 100;
+            font-weight: bold;
+        }
+        
+        #crosshair {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 30px;
+            height: 30px;
+            pointer-events: none;
+            z-index: 50;
+        }
+        
+        #crosshair::before,
+        #crosshair::after {
+            content: '';
             position: absolute;
             background: white;
-            box-shadow: 0 0 3px black;
+            box-shadow: 0 0 3px rgba(0,0,0,0.8);
         }
-
-        .crosshair-h {
-            width: 20px;
-            height: 3px;
-            top: 18px;
-            left: 10px;
+        
+        #crosshair::before {
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 2px;
+            transform: translateY(-50%);
         }
-
-        .crosshair-v {
-            width: 3px;
-            height: 20px;
-            top: 10px;
-            left: 18px;
-        }
-
-        /* Info superior */
-        #info {
-            position: absolute;
-            top: 15px;
-            left: 15px;
-            color: white;
-            font-size: 18px;
-            font-weight: bold;
-            text-shadow: 2px 2px 4px black;
-            pointer-events: none;
-            z-index: 1002;
+        
+        #crosshair::after {
+            left: 50%;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            transform: translateX(-50%);
         }
     </style>
 </head>
 <body>
-    <a-scene 
-        vr-mode-ui="enabled: false"
-        device-orientation-permission-ui="enabled: false">
-        
-        <!-- Cielo celeste -->
-        <a-sky color="#87CEEB"></a-sky>
-
-        <!-- Piso verde 20x20 -->
-        <a-plane 
-            position="0 0 0" 
-            rotation="-90 0 0" 
-            width="20" 
-            height="20" 
-            color="#228B22"
-            shadow="receive: true">
-        </a-plane>
-
-        <!-- Cubo rojo enemigo -->
-        <a-box 
-            id="enemy" 
-            position="5 1 5" 
-            width="1" 
-            height="1" 
-            depth="1" 
-            color="#FF0000"
-            shadow="cast: true">
-        </a-box>
-
-        <!-- Jugador con cámara -->
-        <a-entity id="rig" position="0 0 0">
-            <a-camera 
-                id="camera" 
-                position="0 1.6 0"
-                look-controls="enabled: false"
-                wasd-controls="enabled: false">
-            </a-camera>
-        </a-entity>
-
-        <!-- Iluminación -->
-        <a-light type="ambient" intensity="0.6"></a-light>
-        <a-light type="directional" position="5 10 2" intensity="0.7" cast-shadow="true"></a-light>
-    </a-scene>
-
-    <!-- UI Overlay -->
-    <div id="ui-overlay">
-        <!-- Botón pantalla completa -->
-        <button id="fullscreenBtn">🖥️ PANTALLA COMPLETA</button>
-
-        <!-- Info -->
-        <div id="info">Shooter 3D</div>
-
-        <!-- Crosshair -->
-        <div id="crosshair">
-            <div class="crosshair-line crosshair-h"></div>
-            <div class="crosshair-line crosshair-v"></div>
-        </div>
-
-        <!-- Área de mirar (táctil) -->
-        <div id="lookArea"></div>
-
-        <!-- Controles de movimiento -->
-        <div id="moveControls">
-            <div class="move-btn" id="btnUp">▲</div>
-            <div class="move-btn" id="btnDown">▼</div>
-            <div class="move-btn" id="btnLeft">◀</div>
-            <div class="move-btn" id="btnRight">▶</div>
-        </div>
-
-        <!-- Controles de acción -->
-        <div id="actionControls">
-            <div id="jumpBtn">SALTAR</div>
-            <div id="shootBtn">DISPARAR</div>
-        </div>
+    <canvas id="canvas"></canvas>
+    
+    <div id="crosshair"></div>
+    
+    <button id="fullscreen-btn">PANTALLA COMPLETA</button>
+    
+    <!-- JOYSTICK ESTÁTICO -->
+    <div class="joystick-container">
+        <div class="joystick-base"></div>
+        <div class="joystick-deadzone"></div>
+        <div class="joystick-stick" id="joystick-stick"></div>
+    </div>
+    
+    <div class="controls action-controls">
+        <button class="action-btn" id="btn-jump">SALTAR</button>
+        <button class="action-btn" id="btn-shoot">DISPARAR</button>
     </div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script>
-        // Elementos del DOM
-        const rig = document.querySelector('#rig');
-        const camera = document.querySelector('#camera');
-        const lookArea = document.querySelector('#lookArea');
-        const scene = document.querySelector('a-scene');
-
-        // Variables de estado
-        let position = { x: 0, y: 1.6, z: 0 };
-        let rotation = { x: 0, y: 0 };
-        let velocity = { x: 0, y: 0, z: 0 };
+        // Variables globales
+        let scene, camera, renderer;
+        let player, targetBox, ground;
+        let bullets = [];
+        let playerVelocity = { x: 0, y: 0, z: 0 };
         let isJumping = false;
+        let moveState = { forward: false, backward: false, left: false, right: false };
         
-        const moveSpeed = 0.15;
-        const jumpSpeed = 0.4;
-        const gravity = -0.02;
-        const sensitivity = 0.3;
-
-        // Estado de movimiento
-        const movement = {
-            forward: false,
-            backward: false,
-            left: false,
-            right: false
+        // Configuración
+        const PLAYER_SPEED = 0.15;
+        const JUMP_FORCE = 0.3;
+        const GRAVITY = 0.015;
+        const PLAYER_HEIGHT = 1.6;
+        const GROUND_SIZE = 20;
+        
+        // Control de cámara
+        let mouseX = 0, mouseY = 0;
+        let rotationX = 0, rotationY = 0;
+        let touchStartX = 0, touchStartY = 0;
+        let isTouching = false;
+        
+        // JOYSTICK VARIABLES
+        let joystick = {
+            active: false,
+            centerX: 0,
+            centerY: 0,
+            currentX: 0,
+            currentY: 0,
+            maxRadius: 70, // Radio del círculo externo
+            deadZone: 14, // 20% del radio (70 * 0.2)
+            stickRadius: 30, // Radio del stick interno
+            inputX: 0, // -1 a 1
+            inputY: 0  // -1 a 1
         };
-
-        // ========== PANTALLA COMPLETA ==========
-        document.getElementById('fullscreenBtn').addEventListener('click', () => {
-            const elem = document.documentElement;
-            if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.mozFullScreenElement) {
-                if (elem.requestFullscreen) {
-                    elem.requestFullscreen().catch(err => console.log('Error:', err));
-                } else if (elem.webkitRequestFullscreen) {
-                    elem.webkitRequestFullscreen();
-                } else if (elem.mozRequestFullScreen) {
-                    elem.mozRequestFullScreen();
-                } else if (elem.msRequestFullscreen) {
-                    elem.msRequestFullscreen();
-                }
-            } else {
-                if (document.exitFullscreen) {
-                    document.exitFullscreen();
-                } else if (document.webkitExitFullscreen) {
-                    document.webkitExitFullscreen();
-                } else if (document.mozCancelFullScreen) {
-                    document.mozCancelFullScreen();
-                } else if (document.msExitFullscreen) {
-                    document.msExitFullscreen();
-                }
-            }
-        });
         
-        // Touch para celular
-        document.getElementById('fullscreenBtn').addEventListener('touchend', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            const elem = document.documentElement;
-            if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-                if (elem.requestFullscreen) {
-                    elem.requestFullscreen().catch(err => console.log('Error:', err));
-                } else if (elem.webkitRequestFullscreen) {
-                    elem.webkitRequestFullscreen();
+        // Inicializar
+        function init() {
+            // Escena
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87CEEB);
+            
+            // Cámara
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            
+            // Renderer
+            const canvas = document.getElementById('canvas');
+            renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            
+            // Luz
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.6);
+            directionalLight.position.set(10, 20, 10);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.camera.left = -20;
+            directionalLight.shadow.camera.right = 20;
+            directionalLight.shadow.camera.top = 20;
+            directionalLight.shadow.camera.bottom = -20;
+            directionalLight.shadow.mapSize.width = 2048;
+            directionalLight.shadow.mapSize.height = 2048;
+            scene.add(directionalLight);
+            
+            // Piso verde
+            const groundGeometry = new THREE.PlaneGeometry(GROUND_SIZE, GROUND_SIZE);
+            const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x00ff00 });
+            ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+            
+            // Caja roja (objetivo)
+            const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
+            const boxMaterial = new THREE.MeshLambertMaterial({ color: 0xff0000 });
+            targetBox = new THREE.Mesh(boxGeometry, boxMaterial);
+            targetBox.position.set(0, 0.5, -5);
+            targetBox.castShadow = true;
+            targetBox.receiveShadow = true;
+            targetBox.userData.isHit = false;
+            scene.add(targetBox);
+            
+            console.log("🔴 Intentando crear arteria y glóbulo rojo...");
+            
+            // ESFERA CON SHADER PROCEDURAL (Arteria)
+            try {
+                createArterySphere();
+            } catch(e) {
+                console.error("❌ Error creando arteria:", e);
+            }
+            
+            // GLÓBULO ROJO (Eritrocito bicóncavo)
+            try {
+                createRedBloodCell();
+            } catch(e) {
+                console.error("❌ Error creando glóbulo rojo:", e);
+            }
+            
+            // Jugador (invisible, solo para física)
+            const playerGeometry = new THREE.BoxGeometry(0.5, PLAYER_HEIGHT, 0.5);
+            const playerMaterial = new THREE.MeshBasicMaterial({ visible: false });
+            player = new THREE.Mesh(playerGeometry, playerMaterial);
+            player.position.set(0, PLAYER_HEIGHT / 2, 5);
+            scene.add(player);
+            
+            // Posicionar cámara en el jugador
+            camera.position.copy(player.position);
+            camera.position.y += PLAYER_HEIGHT / 2;
+            
+            // Event listeners
+            setupControls();
+            
+            // Iniciar animación
+            animate();
+        }
+        
+        function setupControls() {
+            // Teclado (mantener para PC)
+            document.addEventListener('keydown', (e) => {
+                switch(e.key.toLowerCase()) {
+                    case 'w': case 'arrowup': moveState.forward = true; break;
+                    case 's': case 'arrowdown': moveState.backward = true; break;
+                    case 'a': case 'arrowleft': moveState.left = true; break;
+                    case 'd': case 'arrowright': moveState.right = true; break;
+                    case ' ': jump(); break;
+                }
+            });
+            
+            document.addEventListener('keyup', (e) => {
+                switch(e.key.toLowerCase()) {
+                    case 'w': case 'arrowup': moveState.forward = false; break;
+                    case 's': case 'arrowdown': moveState.backward = false; break;
+                    case 'a': case 'arrowleft': moveState.left = false; break;
+                    case 'd': case 'arrowright': moveState.right = false; break;
+                }
+            });
+            
+            // Mouse para rotar cámara
+            document.addEventListener('mousemove', (e) => {
+                if (document.pointerLockElement === document.body) {
+                    mouseX = e.movementX || 0;
+                    mouseY = e.movementY || 0;
+                    
+                    rotationY -= mouseX * 0.002;
+                    rotationX -= mouseY * 0.002;
+                    rotationX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, rotationX));
+                }
+            });
+            
+            // Click para disparar
+            document.addEventListener('click', () => {
+                if (document.pointerLockElement !== document.body) {
+                    document.body.requestPointerLock();
+                } else {
+                    shoot();
+                }
+            });
+            
+            // JOYSTICK SETUP
+            setupJoystick();
+            
+            // Touch para rotar cámara (área central superior)
+            const canvas = document.getElementById('canvas');
+            canvas.addEventListener('touchstart', (e) => {
+                const touch = e.touches[0];
+                const screenCenterX = window.innerWidth / 2;
+                const screenCenterY = window.innerHeight / 2;
+                
+                // Solo permitir rotación en el área superior central
+                if (touch.clientY < screenCenterY && 
+                    Math.abs(touch.clientX - screenCenterX) < window.innerWidth / 3) {
+                    isTouching = true;
+                    touchStartX = touch.clientX;
+                    touchStartY = touch.clientY;
+                }
+            });
+            
+            canvas.addEventListener('touchmove', (e) => {
+                if (isTouching && e.touches.length === 1) {
+                    e.preventDefault();
+                    const touch = e.touches[0];
+                    const deltaX = touch.clientX - touchStartX;
+                    const deltaY = touch.clientY - touchStartY;
+                    
+                    rotationY -= deltaX * 0.005;
+                    rotationX -= deltaY * 0.005;
+                    rotationX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, rotationX));
+                    
+                    touchStartX = touch.clientX;
+                    touchStartY = touch.clientY;
+                }
+            });
+            
+            canvas.addEventListener('touchend', () => {
+                isTouching = false;
+            });
+            
+            // Botones de acción
+            document.getElementById('btn-jump').addEventListener('click', jump);
+            document.getElementById('btn-jump').addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                jump();
+            });
+            
+            document.getElementById('btn-shoot').addEventListener('click', shoot);
+            document.getElementById('btn-shoot').addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                shoot();
+            });
+            
+            document.getElementById('fullscreen-btn').addEventListener('click', () => {
+                if (!document.fullscreenElement) {
+                    document.documentElement.requestFullscreen();
+                } else {
+                    document.exitFullscreen();
+                }
+            });
+            
+            // Resize
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+        }
+        
+        // SETUP JOYSTICK ESTÁTICO
+        function setupJoystick() {
+            const joystickContainer = document.querySelector('.joystick-container');
+            const joystickStick = document.getElementById('joystick-stick');
+            
+            // Obtener posición del centro del joystick
+            const rect = joystickContainer.getBoundingClientRect();
+            joystick.centerX = rect.left + rect.width / 2;
+            joystick.centerY = rect.top + rect.height / 2;
+            
+            // Touch Start
+            joystickContainer.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                joystick.active = true;
+                joystickStick.classList.add('active');
+                handleJoystickMove(e.touches[0]);
+            });
+            
+            // Touch Move
+            joystickContainer.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                if (joystick.active) {
+                    handleJoystickMove(e.touches[0]);
+                }
+            });
+            
+            // Touch End
+            joystickContainer.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                resetJoystick();
+            });
+            
+            joystickContainer.addEventListener('touchcancel', (e) => {
+                e.preventDefault();
+                resetJoystick();
+            });
+            
+            // Mouse events (para testing en PC)
+            joystickContainer.addEventListener('mousedown', (e) => {
+                joystick.active = true;
+                joystickStick.classList.add('active');
+                handleJoystickMove(e);
+            });
+            
+            document.addEventListener('mousemove', (e) => {
+                if (joystick.active) {
+                    handleJoystickMove(e);
+                }
+            });
+            
+            document.addEventListener('mouseup', () => {
+                if (joystick.active) {
+                    resetJoystick();
+                }
+            });
+        }
+        
+        function handleJoystickMove(touch) {
+            // Calcular offset desde el centro
+            let deltaX = touch.clientX - joystick.centerX;
+            let deltaY = touch.clientY - joystick.centerY;
+            
+            // Calcular distancia desde el centro
+            let distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+            
+            // Limitar al radio máximo
+            if (distance > joystick.maxRadius) {
+                const angle = Math.atan2(deltaY, deltaX);
+                deltaX = Math.cos(angle) * joystick.maxRadius;
+                deltaY = Math.sin(angle) * joystick.maxRadius;
+                distance = joystick.maxRadius;
+            }
+            
+            // Guardar posición actual
+            joystick.currentX = deltaX;
+            joystick.currentY = deltaY;
+            
+            // Aplicar dead zone
+            if (distance < joystick.deadZone) {
+                joystick.inputX = 0;
+                joystick.inputY = 0;
+            } else {
+                // Remapear el rango considerando la dead zone
+                const effectiveDistance = distance - joystick.deadZone;
+                const effectiveMaxRadius = joystick.maxRadius - joystick.deadZone;
+                const normalizedDistance = Math.min(effectiveDistance / effectiveMaxRadius, 1);
+                
+                const angle = Math.atan2(deltaY, deltaX);
+                joystick.inputX = Math.cos(angle) * normalizedDistance;
+                joystick.inputY = Math.sin(angle) * normalizedDistance;
+            }
+            
+            // Actualizar posición visual del stick
+            const stick = document.getElementById('joystick-stick');
+            stick.style.transform = `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px))`;
+        }
+        
+        function resetJoystick() {
+            joystick.active = false;
+            joystick.currentX = 0;
+            joystick.currentY = 0;
+            joystick.inputX = 0;
+            joystick.inputY = 0;
+            
+            const stick = document.getElementById('joystick-stick');
+            stick.style.transform = 'translate(-50%, -50%)';
+            stick.classList.remove('active');
+        }
+        
+        // CREAR ESFERA CON TEXTURA + MATERIAL AVANZADO (Estrategia 2)
+        function createArterySphere() {
+            // Geometría: Esfera escalada (2 alto x 1 ancho x 3 grosor)
+            const sphereGeometry = new THREE.SphereGeometry(1, 64, 64);
+            
+            // Crear textura procedural en canvas (256x256 para mayor resolución)
+            const textureSize = 256; // 4x más grande = menos pixelado
+            const canvas = document.createElement('canvas');
+            canvas.width = textureSize;
+            canvas.height = textureSize;
+            const ctx = canvas.getContext('2d');
+            
+            // Generar textura con variaciones de rojo (venas)
+            const imageData = ctx.createImageData(textureSize, textureSize);
+            const data = imageData.data;
+            
+            // Función de noise mejorada (Perlin-like 2D)
+            function noise2D(x, y) {
+                const n1 = Math.sin(x * 0.1) * Math.cos(y * 0.1);
+                const n2 = Math.sin(x * 0.3 + y * 0.2) * 0.5;
+                const n3 = Math.sin(x * 0.7 - y * 0.5) * 0.25;
+                const n4 = Math.sin(x * 1.3 + y * 1.1) * 0.125;
+                return n1 + n2 + n3 + n4;
+            }
+            
+            for (let y = 0; y < textureSize; y++) {
+                for (let x = 0; x < textureSize; x++) {
+                    const i = (y * textureSize + x) * 4;
+                    
+                    // Noise con múltiples frecuencias (más detalle)
+                    const noise = noise2D(x, y) + 
+                                  (Math.random() - 0.5) * 0.15; // Menos ruido random
+                    
+                    // Venas oscuras (líneas)
+                    const veinPattern = Math.abs(Math.sin(x * 0.15 + noise * 2)) * 
+                                       Math.abs(Math.cos(y * 0.12 + noise * 1.5));
+                    const veinDark = veinPattern < 0.3 ? -20 : 0;
+                    
+                    // Color base rojo con variación suave
+                    const r = Math.floor(200 + noise * 25 + veinDark);
+                    const g = Math.floor(30 + noise * 12 + veinDark * 0.5);
+                    const b = Math.floor(30 + noise * 8 + veinDark * 0.3);
+                    
+                    data[i] = Math.max(0, Math.min(255, r));     // R
+                    data[i + 1] = Math.max(0, Math.min(255, g)); // G
+                    data[i + 2] = Math.max(0, Math.min(255, b)); // B
+                    data[i + 3] = 255;                           // A
                 }
             }
-        });
-
-        // ========== CONTROLES DE MOVIMIENTO ==========
-        function setupMovementButton(id, direction) {
-            const btn = document.getElementById(id);
             
-            const start = () => movement[direction] = true;
-            const stop = () => movement[direction] = false;
+            ctx.putImageData(imageData, 0, 0);
             
-            btn.addEventListener('touchstart', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                start();
+            // Crear textura de Three.js desde canvas
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.wrapS = THREE.RepeatWrapping;
+            texture.wrapT = THREE.RepeatWrapping;
+            texture.repeat.set(4, 4); // Más repeticiones = más detalle
+            
+            // IMPORTANTE: Activar filtrado para suavizar
+            texture.minFilter = THREE.LinearMipmapLinearFilter;
+            texture.magFilter = THREE.LinearFilter;
+            texture.anisotropy = renderer.capabilities.getMaxAnisotropy(); // Máxima calidad
+            texture.generateMipmaps = true;
+            
+            // Material MeshPhongMaterial con propiedades orgánicas
+            const arteryMaterial = new THREE.MeshPhongMaterial({
+                map: texture,
+                color: 0xbb1111, // Rojo más oscuro base
+                shininess: 100,        // Brillo húmedo aumentado
+                specular: 0xff9999,   // Specular rosado
+                emissive: 0x220000,   // Emisión leve
+                bumpMap: texture,
+                bumpScale: 0.08,      // Relieve más visible
             });
             
-            btn.addEventListener('touchend', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                stop();
-            });
+            const arterySphere = new THREE.Mesh(sphereGeometry, arteryMaterial);
             
-            btn.addEventListener('mousedown', start);
-            btn.addEventListener('mouseup', stop);
-            btn.addEventListener('mouseleave', stop);
+            // Escalar: 1 ancho (X), 2 alto (Y), 3 grosor (Z)
+            arterySphere.scale.set(1, 2, 3);
+            
+            // Posicionar cerca del jugador para verla bien
+            arterySphere.position.set(3, 1.5, -3);
+            
+            arterySphere.castShadow = true;
+            arterySphere.receiveShadow = true;
+            
+            scene.add(arterySphere);
+            
+            console.log("✅ Esfera de arteria creada - Textura 256x256 con filtrado suave");
         }
-
-        setupMovementButton('btnUp', 'forward');
-        setupMovementButton('btnDown', 'backward');
-        setupMovementButton('btnLeft', 'left');
-        setupMovementButton('btnRight', 'right');
-
-        // ========== SALTAR ==========
-        const jumpBtn = document.getElementById('jumpBtn');
-
+        
+        // CREAR GLÓBULO ROJO (Eritrocito bicóncavo) - VERSIÓN SIMPLIFICADA
+        function createRedBloodCell() {
+            console.log("🩸 Creando glóbulo rojo...");
+            
+            // 1. CREAR GEOMETRÍA BASE
+            const geometry = new THREE.SphereGeometry(0.5, 32, 16);
+            const positions = geometry.attributes.position;
+            
+            console.log("📐 Geometría creada, vértices:", positions.count);
+            
+            // 2. MODIFICAR VÉRTICES para forma bicóncava
+            for (let i = 0; i < positions.count; i++) {
+                const x = positions.getX(i);
+                const y = positions.getY(i);
+                const z = positions.getZ(i);
+                
+                // Distancia desde el centro en plano XZ
+                const r = Math.sqrt(x * x + z * z);
+                
+                // Factor de hundimiento bicóncavo
+                const k = 1.5;
+                const factor = 1.0 - (r * k) * (r * k);
+                
+                // Aplicar hundimiento
+                let newY = y;
+                if (factor > 0) {
+                    newY = y * factor * 0.3;
+                } else {
+                    newY = y * 0.3;
+                }
+                
+                positions.setY(i, newY);
+            }
+            
+            geometry.computeVertexNormals();
+            console.log("✅ Geometría bicóncava aplicada");
+            
+            // 3. MATERIAL SIMPLE (sin textura primero)
+            const material = new THREE.MeshPhongMaterial({
+                color: 0xcc1111,
+                shininess: 20,
+                specular: 0x331111,
+                side: THREE.DoubleSide
+            });
+            
+            // 4. CREAR MESH
+            const redBloodCell = new THREE.Mesh(geometry, material);
+            
+            // Posicionar MUY CERCA del jugador para verlo seguro
+            redBloodCell.position.set(-1.5, 1.0, 2);
+            
+            // Rotación para ver forma
+            redBloodCell.rotation.x = Math.PI / 4;
+            
+            redBloodCell.castShadow = true;
+            redBloodCell.receiveShadow = true;
+            
+            scene.add(redBloodCell);
+            window.redBloodCell = redBloodCell;
+            
+            console.log("✅ Glóbulo rojo añadido en posición:", redBloodCell.position);
+        }
+        
         function jump() {
-            if (position.y <= 1.6 && !isJumping) {
-                velocity.y = jumpSpeed;
+            if (!isJumping) {
+                playerVelocity.y = JUMP_FORCE;
                 isJumping = true;
             }
         }
-
-        jumpBtn.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            jump();
-        });
-
-        jumpBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            jump();
-        });
-
-        // ========== DISPARAR ==========
-        const shootBtn = document.getElementById('shootBtn');
-
+        
         function shoot() {
-            // Obtener la rotación REAL de la cámara (no la que guardo yo)
-            const cameraRotation = camera.object3D.rotation;
+            const bulletGeometry = new THREE.SphereGeometry(0.1, 16, 16);
+            const bulletMaterial = new THREE.MeshLambertMaterial({ color: 0xffff00 });
+            const bullet = new THREE.Mesh(bulletGeometry, bulletMaterial);
             
-            // Crear bala
-            const bullet = document.createElement('a-sphere');
-            bullet.setAttribute('radius', '0.15');
-            bullet.setAttribute('color', '#FFFF00');
-            bullet.setAttribute('shadow', 'cast: true');
+            bullet.position.copy(camera.position);
+            bullet.castShadow = true;
             
-            // Posición inicial: desde la cámara
-            const cameraWorldPos = new THREE.Vector3();
-            camera.object3D.getWorldPosition(cameraWorldPos);
+            // Dirección de disparo basada en la cámara
+            const direction = new THREE.Vector3();
+            camera.getWorldDirection(direction);
             
-            bullet.setAttribute('position', {
-                x: cameraWorldPos.x,
-                y: cameraWorldPos.y,
-                z: cameraWorldPos.z
-            });
-            scene.appendChild(bullet);
-
-            // Obtener el vector de dirección hacia donde mira la cámara
-            const direction = new THREE.Vector3(0, 0, -1);
-            direction.applyQuaternion(camera.object3D.quaternion);
-            direction.normalize();
-
-            // Animar bala
-            let traveled = 0;
-            const bulletSpeed = 0.8;
-            const maxDistance = 50;
-
-            const interval = setInterval(() => {
-                const pos = bullet.getAttribute('position');
-                
-                // Mover la bala en la dirección 3D completa
-                pos.x += direction.x * bulletSpeed;
-                pos.y += direction.y * bulletSpeed;
-                pos.z += direction.z * bulletSpeed;
-                
-                bullet.setAttribute('position', pos);
-                traveled += bulletSpeed;
-
-                // Verificar colisión con el cubo enemigo
-                const enemy = document.getElementById('enemy');
-                if (enemy) {
-                    const enemyPos = enemy.getAttribute('position');
-                    
-                    const distance = Math.sqrt(
-                        Math.pow(pos.x - enemyPos.x, 2) +
-                        Math.pow(pos.y - enemyPos.y, 2) +
-                        Math.pow(pos.z - enemyPos.z, 2)
-                    );
-                    
-                    if (distance < 0.6) {
-                        // ¡Impacto! Cambiar color del cubo temporalmente
-                        enemy.setAttribute('color', '#00FF00');
-                        setTimeout(() => {
-                            enemy.setAttribute('color', '#FF0000');
-                        }, 200);
-                        clearInterval(interval);
-                        if (bullet.parentNode) {
-                            scene.removeChild(bullet);
-                        }
-                        return;
-                    }
-                }
-
-                // Eliminar si sale del rango o toca el suelo
-                if (traveled >= maxDistance || pos.y < -1) {
-                    clearInterval(interval);
-                    if (bullet.parentNode) {
-                        scene.removeChild(bullet);
-                    }
-                }
-            }, 16);
+            bullet.userData.velocity = direction.multiplyScalar(0.5);
+            
+            scene.add(bullet);
+            bullets.push(bullet);
         }
-
-        shootBtn.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            shoot();
-        });
-
-        shootBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            shoot();
-        });
-
-        // ========== MIRAR ALREDEDOR (TÁCTIL Y MOUSE) ==========
-        let isDragging = false;
-        let lastX = 0;
-        let lastY = 0;
-
-        lookArea.addEventListener('mousedown', (e) => {
-            isDragging = true;
-            lastX = e.clientX;
-            lastY = e.clientY;
-        });
-
-        document.addEventListener('mousemove', (e) => {
-            if (isDragging) {
-                const deltaX = e.clientX - lastX;
-                const deltaY = e.clientY - lastY;
-                
-                rotation.y -= deltaX * sensitivity;
-                rotation.x -= deltaY * sensitivity;
-                
-                rotation.x = Math.max(-85, Math.min(85, rotation.x));
-                
-                lastX = e.clientX;
-                lastY = e.clientY;
-            }
-        });
-
-        document.addEventListener('mouseup', () => {
-            isDragging = false;
-        });
-
-        // Touch para móvil
-        lookArea.addEventListener('touchstart', (e) => {
-            if (e.touches.length === 1) {
-                isDragging = true;
-                lastX = e.touches[0].clientX;
-                lastY = e.touches[0].clientY;
-            }
-        }, { passive: true });
-
-        lookArea.addEventListener('touchmove', (e) => {
-            if (isDragging && e.touches.length === 1) {
-                const deltaX = e.touches[0].clientX - lastX;
-                const deltaY = e.touches[0].clientY - lastY;
-                
-                rotation.y -= deltaX * sensitivity;
-                rotation.x -= deltaY * sensitivity;
-                
-                rotation.x = Math.max(-85, Math.min(85, rotation.x));
-                
-                lastX = e.touches[0].clientX;
-                lastY = e.touches[0].clientY;
-            }
-        }, { passive: true });
-
-        lookArea.addEventListener('touchend', () => {
-            isDragging = false;
-        });
-
-        // ========== TECLADO PC ==========
-        document.addEventListener('keydown', (e) => {
-            switch(e.key.toLowerCase()) {
-                case 'w': movement.forward = true; break;
-                case 's': movement.backward = true; break;
-                case 'a': movement.left = true; break;
-                case 'd': movement.right = true; break;
-                case ' ': e.preventDefault(); jump(); break;
-                case 'e': shoot(); break;
-            }
-        });
-
-        document.addEventListener('keyup', (e) => {
-            switch(e.key.toLowerCase()) {
-                case 'w': movement.forward = false; break;
-                case 's': movement.backward = false; break;
-                case 'a': movement.left = false; break;
-                case 'd': movement.right = false; break;
-            }
-        });
-
-        // ========== LOOP PRINCIPAL ==========
-        function gameLoop() {
-            // Movimiento basado en rotación
-            const rad = rotation.y * Math.PI / 180;
+        
+        function updatePlayer() {
+            // Movimiento desde teclado (PC)
+            const moveVector = new THREE.Vector3();
             
-            if (movement.forward) {
-                position.x -= Math.sin(rad) * moveSpeed;
-                position.z -= Math.cos(rad) * moveSpeed;
+            if (moveState.forward) moveVector.z -= 1;
+            if (moveState.backward) moveVector.z += 1;
+            if (moveState.left) moveVector.x -= 1;
+            if (moveState.right) moveVector.x += 1;
+            
+            // Movimiento desde joystick (Mobile)
+            // Y invertido porque en pantalla Y+ es hacia abajo
+            moveVector.x += joystick.inputX;
+            moveVector.z += joystick.inputY;
+            
+            if (moveVector.length() > 0) {
+                moveVector.normalize();
+                
+                // Aplicar rotación de cámara al movimiento
+                const rotatedMove = moveVector.applyAxisAngle(new THREE.Vector3(0, 1, 0), rotationY);
+                
+                player.position.x += rotatedMove.x * PLAYER_SPEED;
+                player.position.z += rotatedMove.z * PLAYER_SPEED;
+                
+                // Limitar al terreno
+                const halfGround = GROUND_SIZE / 2 - 0.5;
+                player.position.x = Math.max(-halfGround, Math.min(halfGround, player.position.x));
+                player.position.z = Math.max(-halfGround, Math.min(halfGround, player.position.z));
             }
-            if (movement.backward) {
-                position.x += Math.sin(rad) * moveSpeed;
-                position.z += Math.cos(rad) * moveSpeed;
-            }
-            if (movement.left) {
-                position.x -= Math.cos(rad) * moveSpeed;
-                position.z += Math.sin(rad) * moveSpeed;
-            }
-            if (movement.right) {
-                position.x += Math.cos(rad) * moveSpeed;
-                position.z -= Math.sin(rad) * moveSpeed;
-            }
-
-            // Física de salto y gravedad
-            velocity.y += gravity;
-            position.y += velocity.y;
-
-            if (position.y <= 1.6) {
-                position.y = 1.6;
-                velocity.y = 0;
+            
+            // Gravedad
+            playerVelocity.y -= GRAVITY;
+            player.position.y += playerVelocity.y;
+            
+            // Colisión con el suelo
+            if (player.position.y <= PLAYER_HEIGHT / 2) {
+                player.position.y = PLAYER_HEIGHT / 2;
+                playerVelocity.y = 0;
                 isJumping = false;
             }
-
-            // Límites del mapa
-            position.x = Math.max(-9.5, Math.min(9.5, position.x));
-            position.z = Math.max(-9.5, Math.min(9.5, position.z));
-
-            // Actualizar posición y rotación
-            rig.setAttribute('position', position);
-            camera.setAttribute('rotation', `${rotation.x} ${rotation.y} 0`);
-
-            requestAnimationFrame(gameLoop);
+            
+            // Actualizar cámara
+            camera.position.copy(player.position);
+            camera.position.y += PLAYER_HEIGHT / 2;
+            camera.rotation.order = 'YXZ';
+            camera.rotation.y = rotationY;
+            camera.rotation.x = rotationX;
         }
-
-        // Iniciar cuando la escena cargue
-        scene.addEventListener('loaded', () => {
-            console.log('Juego iniciado');
-            gameLoop();
-        });
+        
+        function updateBullets() {
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                const bullet = bullets[i];
+                
+                bullet.position.add(bullet.userData.velocity);
+                
+                // Verificar colisión con la caja
+                const distance = bullet.position.distanceTo(targetBox.position);
+                if (distance < 0.6 && !targetBox.userData.isHit) {
+                    targetBox.material.color.setHex(0x00ff00);
+                    targetBox.userData.isHit = true;
+                }
+                
+                // Eliminar balas fuera de rango
+                if (bullet.position.length() > 50) {
+                    scene.remove(bullet);
+                    bullets.splice(i, 1);
+                }
+            }
+        }
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Animar glóbulo rojo (rotación tumbling)
+            if (window.redBloodCell) {
+                window.redBloodCell.rotation.x += 0.005;
+                window.redBloodCell.rotation.y += 0.008;
+            }
+            
+            updatePlayer();
+            updateBullets();
+            
+            renderer.render(scene, camera);
+        }
+        
+        // Iniciar
+        init();
     </script>
 </body>
 </html>
