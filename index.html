@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Juego Anatomia 3D-5 NOVIEMBRE </title>
+    <title>Juego Anatomia 3D - 06-NOVIEMBRE</title>
     <style>
         * {
             margin: 0;
@@ -14,13 +14,14 @@
         body {
             overflow: hidden;
             font-family: Arial, sans-serif;
-            touch-action: none;
+            /* FIX: Remover touch-action: none global */
         }
         
         #canvas {
             display: block;
             width: 100%;
             height: 100vh;
+            touch-action: pan-y pan-x; /*  Permitir touch en canvas */
         }
         
         .controls {
@@ -36,6 +37,7 @@
             width: 140px;
             height: 140px;
             z-index: 100;
+            touch-action: none; /* Solo bloquear en joystick */
         }
         
         .joystick-base {
@@ -67,7 +69,6 @@
             box-shadow: 0 3px 12px rgba(0, 0, 0, 0.5);
         }
         
-        /* Dead zone visual (opcional, para debug) */
         .joystick-deadzone {
             position: absolute;
             width: 28px;
@@ -101,7 +102,7 @@
             align-items: center;
             justify-content: center;
             text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
-            touch-action: none;
+            touch-action: none; /* Bloquear en botones */
         }
         
         #btn-jump {
@@ -165,16 +166,30 @@
             width: 2px;
             transform: translateX(-50%);
         }
+
+        /* ✅ DEBUG INFO */
+        #debug {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.7);
+            color: lime;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 12px;
+            z-index: 200;
+            border-radius: 5px;
+        }
     </style>
 </head>
 <body>
     <canvas id="canvas"></canvas>
     
     <div id="crosshair"></div>
+    <div id="debug"></div>
     
     <button id="fullscreen-btn">PANTALLA COMPLETA</button>
     
-    <!-- JOYSTICK ESTÁTICO -->
     <div class="joystick-container">
         <div class="joystick-base"></div>
         <div class="joystick-deadzone"></div>
@@ -188,7 +203,6 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script>
-        // Variables globales
         let scene, camera, renderer;
         let player, targetBox, ground;
         let bullets = [];
@@ -196,50 +210,44 @@
         let isJumping = false;
         let moveState = { forward: false, backward: false, left: false, right: false };
         
-        // Configuración
         const PLAYER_SPEED = 0.15;
         const JUMP_FORCE = 0.3;
         const GRAVITY = 0.015;
         const PLAYER_HEIGHT = 1.6;
         const GROUND_SIZE = 20;
         
-        // Control de cámara
         let mouseX = 0, mouseY = 0;
         let rotationX = 0, rotationY = 0;
         let touchStartX = 0, touchStartY = 0;
         let isTouching = false;
         
-        // JOYSTICK VARIABLES
+        // ✅ JOYSTICK MEJORADO
         let joystick = {
             active: false,
+            touchId: null, //  Nuevo: trackear el touch específico
             centerX: 0,
             centerY: 0,
             currentX: 0,
             currentY: 0,
-            maxRadius: 70, // Radio del círculo externo
-            deadZone: 14, // 20% del radio (70 * 0.2)
-            stickRadius: 30, // Radio del stick interno
-            inputX: 0, // -1 a 1
-            inputY: 0  // -1 a 1
+            maxRadius: 70,
+            deadZone: 14,
+            stickRadius: 30,
+            inputX: 0,
+            inputY: 0
         };
         
-        // Inicializar
         function init() {
-            // Escena
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0x87CEEB);
             
-            // Cámara
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
             
-            // Renderer
             const canvas = document.getElementById('canvas');
             renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.shadowMap.enabled = true;
             renderer.shadowMap.type = THREE.PCFSoftShadowMap;
             
-            // Luz
             const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
             scene.add(ambientLight);
             
@@ -254,7 +262,6 @@
             directionalLight.shadow.mapSize.height = 2048;
             scene.add(directionalLight);
             
-            // Piso verde
             const groundGeometry = new THREE.PlaneGeometry(GROUND_SIZE, GROUND_SIZE);
             const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x00ff00 });
             ground = new THREE.Mesh(groundGeometry, groundMaterial);
@@ -262,9 +269,8 @@
             ground.receiveShadow = true;
             scene.add(ground);
             
-            // Caja roja (objetivo)
             const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
-            const boxMaterial = new THREE.MeshLambertMaterial({ color: 0xff0000 });
+            const boxMaterial = new THREE.MeshLambertMaterial({ color: 0xffff00 });
             targetBox = new THREE.Mesh(boxGeometry, boxMaterial);
             targetBox.position.set(0, 0.5, -5);
             targetBox.castShadow = true;
@@ -272,49 +278,42 @@
             targetBox.userData.isHit = false;
             scene.add(targetBox);
             
-            console.log("🔴 Intentando crear arteria y glóbulo rojo...");
-            
-            // ESFERA CON SHADER PROCEDURAL (Arteria)
             try {
                 createArterySphere();
             } catch(e) {
-                console.error("❌ Error creando arteria:", e);
+                console.error("Error creando arteria:", e);
             }
             
-            // GLÓBULO ROJO (Eritrocito bicóncavo)
             try {
                 createRedBloodCell();
             } catch(e) {
-                console.error("❌ Error creando glóbulo rojo:", e);
+                console.error("Error creando glóbulo rojo:", e);
             }
             
-            // Jugador (invisible, solo para física)
             const playerGeometry = new THREE.BoxGeometry(0.5, PLAYER_HEIGHT, 0.5);
             const playerMaterial = new THREE.MeshBasicMaterial({ visible: false });
             player = new THREE.Mesh(playerGeometry, playerMaterial);
             player.position.set(0, PLAYER_HEIGHT / 2, 5);
             scene.add(player);
             
-            // Posicionar cámara en el jugador
             camera.position.copy(player.position);
             camera.position.y += PLAYER_HEIGHT / 2;
             
-            // Event listeners
             setupControls();
-            
-            // Iniciar animación
             animate();
         }
         
         function setupControls() {
-            // Teclado (mantener para PC)
             document.addEventListener('keydown', (e) => {
                 switch(e.key.toLowerCase()) {
                     case 'w': case 'arrowup': moveState.forward = true; break;
                     case 's': case 'arrowdown': moveState.backward = true; break;
                     case 'a': case 'arrowleft': moveState.left = true; break;
                     case 'd': case 'arrowright': moveState.right = true; break;
-                    case ' ': jump(); break;
+                    case ' ': 
+                        e.preventDefault();
+                        jump(); 
+                        break;
                 }
             });
             
@@ -327,7 +326,6 @@
                 }
             });
             
-            // Mouse para rotar cámara
             document.addEventListener('mousemove', (e) => {
                 if (document.pointerLockElement === document.body) {
                     mouseX = e.movementX || 0;
@@ -339,7 +337,6 @@
                 }
             });
             
-            // Click para disparar
             document.addEventListener('click', () => {
                 if (document.pointerLockElement !== document.body) {
                     document.body.requestPointerLock();
@@ -348,17 +345,15 @@
                 }
             });
             
-            // JOYSTICK SETUP
+            // ✅ JOYSTICK SETUP MEJORADO
             setupJoystick();
             
-            // Touch para rotar cámara (área central superior)
             const canvas = document.getElementById('canvas');
             canvas.addEventListener('touchstart', (e) => {
                 const touch = e.touches[0];
                 const screenCenterX = window.innerWidth / 2;
                 const screenCenterY = window.innerHeight / 2;
                 
-                // Solo permitir rotación en el área superior central
                 if (touch.clientY < screenCenterY && 
                     Math.abs(touch.clientX - screenCenterX) < window.innerWidth / 3) {
                     isTouching = true;
@@ -387,14 +382,11 @@
                 isTouching = false;
             });
             
-            // Botones de acción
-            document.getElementById('btn-jump').addEventListener('click', jump);
             document.getElementById('btn-jump').addEventListener('touchstart', (e) => {
                 e.preventDefault();
                 jump();
             });
             
-            document.getElementById('btn-shoot').addEventListener('click', shoot);
             document.getElementById('btn-shoot').addEventListener('touchstart', (e) => {
                 e.preventDefault();
                 shoot();
@@ -408,52 +400,87 @@
                 }
             });
             
-            // Resize
             window.addEventListener('resize', () => {
                 camera.aspect = window.innerWidth / window.innerHeight;
                 camera.updateProjectionMatrix();
                 renderer.setSize(window.innerWidth, window.innerHeight);
+                // ✅ Recalcular centro del joystick al cambiar tamaño
+                updateJoystickCenter();
             });
         }
         
-        // SETUP JOYSTICK ESTÁTICO
+        // ✅ FUNCIÓN PARA ACTUALIZAR EL CENTRO DEL JOYSTICK
+        function updateJoystickCenter() {
+            const joystickContainer = document.querySelector('.joystick-container');
+            const rect = joystickContainer.getBoundingClientRect();
+            joystick.centerX = rect.left + rect.width / 2;
+            joystick.centerY = rect.top + rect.height / 2;
+            console.log('Joystick center updated:', joystick.centerX, joystick.centerY);
+        }
+        
+        // ✅ SETUP JOYSTICK TOTALMENTE REESCRITO
         function setupJoystick() {
             const joystickContainer = document.querySelector('.joystick-container');
             const joystickStick = document.getElementById('joystick-stick');
             
-            // Obtener posición del centro del joystick
-            const rect = joystickContainer.getBoundingClientRect();
-            joystick.centerX = rect.left + rect.width / 2;
-            joystick.centerY = rect.top + rect.height / 2;
+            // ✅ Calcular centro inicial
+            updateJoystickCenter();
             
-            // Touch Start
+            // ✅ Touch Start - CON TRACKING DE TOUCH ID
             joystickContainer.addEventListener('touchstart', (e) => {
                 e.preventDefault();
+                e.stopPropagation(); // ✅ Evitar propagación
+                
+                const touch = e.changedTouches[0];
                 joystick.active = true;
+                joystick.touchId = touch.identifier; // ✅ Guardar ID del touch
                 joystickStick.classList.add('active');
-                handleJoystickMove(e.touches[0]);
-            });
+                
+                // ✅ Recalcular centro en cada touch (por si acaso)
+                updateJoystickCenter();
+                
+                handleJoystickMove(touch);
+                console.log('Joystick START, touchId:', joystick.touchId);
+            }, { passive: false });
             
-            // Touch Move
+            // ✅ Touch Move - BUSCAR EL TOUCH CORRECTO
             joystickContainer.addEventListener('touchmove', (e) => {
                 e.preventDefault();
+                e.stopPropagation();
+                
                 if (joystick.active) {
-                    handleJoystickMove(e.touches[0]);
+                    // ✅ Buscar el touch correcto por ID
+                    for (let i = 0; i < e.changedTouches.length; i++) {
+                        const touch = e.changedTouches[i];
+                        if (touch.identifier === joystick.touchId) {
+                            handleJoystickMove(touch);
+                            break;
+                        }
+                    }
                 }
-            });
+            }, { passive: false });
             
-            // Touch End
+            // ✅ Touch End - VERIFICAR QUE SEA EL TOUCH CORRECTO
             joystickContainer.addEventListener('touchend', (e) => {
                 e.preventDefault();
-                resetJoystick();
-            });
+                e.stopPropagation();
+                
+                for (let i = 0; i < e.changedTouches.length; i++) {
+                    const touch = e.changedTouches[i];
+                    if (touch.identifier === joystick.touchId) {
+                        resetJoystick();
+                        console.log('Joystick END');
+                        break;
+                    }
+                }
+            }, { passive: false });
             
             joystickContainer.addEventListener('touchcancel', (e) => {
                 e.preventDefault();
                 resetJoystick();
-            });
+            }, { passive: false });
             
-            // Mouse events (para testing en PC)
+            // Mouse events (para PC)
             joystickContainer.addEventListener('mousedown', (e) => {
                 joystick.active = true;
                 joystickStick.classList.add('active');
@@ -473,12 +500,15 @@
             });
         }
         
-        function handleJoystickMove(touch) {
-            // Calcular offset desde el centro
-            let deltaX = touch.clientX - joystick.centerX;
-            let deltaY = touch.clientY - joystick.centerY;
+        // ✅ HANDLE JOYSTICK MOVE MEJORADO
+        function handleJoystickMove(input) {
+            // ✅ Extraer coordenadas correctamente (Touch o Mouse)
+            const clientX = input.clientX !== undefined ? input.clientX : input.pageX;
+            const clientY = input.clientY !== undefined ? input.clientY : input.pageY;
             
-            // Calcular distancia desde el centro
+            let deltaX = clientX - joystick.centerX;
+            let deltaY = clientY - joystick.centerY;
+            
             let distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
             
             // Limitar al radio máximo
@@ -489,16 +519,14 @@
                 distance = joystick.maxRadius;
             }
             
-            // Guardar posición actual
             joystick.currentX = deltaX;
             joystick.currentY = deltaY;
             
-            // Aplicar dead zone
+            // Dead zone
             if (distance < joystick.deadZone) {
                 joystick.inputX = 0;
                 joystick.inputY = 0;
             } else {
-                // Remapear el rango considerando la dead zone
                 const effectiveDistance = distance - joystick.deadZone;
                 const effectiveMaxRadius = joystick.maxRadius - joystick.deadZone;
                 const normalizedDistance = Math.min(effectiveDistance / effectiveMaxRadius, 1);
@@ -508,13 +536,17 @@
                 joystick.inputY = Math.sin(angle) * normalizedDistance;
             }
             
-            // Actualizar posición visual del stick
+            // Actualizar visual
             const stick = document.getElementById('joystick-stick');
             stick.style.transform = `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px))`;
+            
+            // ✅ Debug
+            updateDebug();
         }
         
         function resetJoystick() {
             joystick.active = false;
+            joystick.touchId = null; // ✅ Reset touch ID
             joystick.currentX = 0;
             joystick.currentY = 0;
             joystick.inputX = 0;
@@ -523,25 +555,32 @@
             const stick = document.getElementById('joystick-stick');
             stick.style.transform = 'translate(-50%, -50%)';
             stick.classList.remove('active');
+            
+            updateDebug();
         }
         
-        // CREAR ESFERA CON TEXTURA + MATERIAL AVANZADO (Estrategia 2)
+        // ✅ DEBUG INFO
+        function updateDebug() {
+            const debug = document.getElementById('debug');
+            debug.innerHTML = `
+                Active: ${joystick.active}<br>
+                X: ${joystick.inputX.toFixed(2)}<br>
+                Y: ${joystick.inputY.toFixed(2)}<br>
+                Center: ${joystick.centerX.toFixed(0)}, ${joystick.centerY.toFixed(0)}
+            `;
+        }
+        
         function createArterySphere() {
-            // Geometría: Esfera escalada (2 alto x 1 ancho x 3 grosor)
             const sphereGeometry = new THREE.SphereGeometry(1, 64, 64);
-            
-            // Crear textura procedural en canvas (256x256 para mayor resolución)
-            const textureSize = 256; // 4x más grande = menos pixelado
+            const textureSize = 256;
             const canvas = document.createElement('canvas');
             canvas.width = textureSize;
             canvas.height = textureSize;
             const ctx = canvas.getContext('2d');
             
-            // Generar textura con variaciones de rojo (venas)
             const imageData = ctx.createImageData(textureSize, textureSize);
             const data = imageData.data;
             
-            // Función de noise mejorada (Perlin-like 2D)
             function noise2D(x, y) {
                 const n1 = Math.sin(x * 0.1) * Math.cos(y * 0.1);
                 const n2 = Math.sin(x * 0.3 + y * 0.2) * 0.5;
@@ -553,93 +592,63 @@
             for (let y = 0; y < textureSize; y++) {
                 for (let x = 0; x < textureSize; x++) {
                     const i = (y * textureSize + x) * 4;
-                    
-                    // Noise con múltiples frecuencias (más detalle)
-                    const noise = noise2D(x, y) + 
-                                  (Math.random() - 0.5) * 0.15; // Menos ruido random
-                    
-                    // Venas oscuras (líneas)
+                    const noise = noise2D(x, y) + (Math.random() - 0.5) * 0.15;
                     const veinPattern = Math.abs(Math.sin(x * 0.15 + noise * 2)) * 
                                        Math.abs(Math.cos(y * 0.12 + noise * 1.5));
                     const veinDark = veinPattern < 0.3 ? -20 : 0;
                     
-                    // Color base rojo con variación suave
                     const r = Math.floor(200 + noise * 25 + veinDark);
                     const g = Math.floor(30 + noise * 12 + veinDark * 0.5);
                     const b = Math.floor(30 + noise * 8 + veinDark * 0.3);
                     
-                    data[i] = Math.max(0, Math.min(255, r));     // R
-                    data[i + 1] = Math.max(0, Math.min(255, g)); // G
-                    data[i + 2] = Math.max(0, Math.min(255, b)); // B
-                    data[i + 3] = 255;                           // A
+                    data[i] = Math.max(0, Math.min(255, r));
+                    data[i + 1] = Math.max(0, Math.min(255, g));
+                    data[i + 2] = Math.max(0, Math.min(255, b));
+                    data[i + 3] = 255;
                 }
             }
             
             ctx.putImageData(imageData, 0, 0);
             
-            // Crear textura de Three.js desde canvas
             const texture = new THREE.CanvasTexture(canvas);
             texture.wrapS = THREE.RepeatWrapping;
             texture.wrapT = THREE.RepeatWrapping;
-            texture.repeat.set(4, 4); // Más repeticiones = más detalle
-            
-            // IMPORTANTE: Activar filtrado para suavizar
+            texture.repeat.set(4, 4);
             texture.minFilter = THREE.LinearMipmapLinearFilter;
             texture.magFilter = THREE.LinearFilter;
-            texture.anisotropy = renderer.capabilities.getMaxAnisotropy(); // Máxima calidad
+            texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
             texture.generateMipmaps = true;
             
-            // Material MeshPhongMaterial con propiedades orgánicas
             const arteryMaterial = new THREE.MeshPhongMaterial({
                 map: texture,
-                color: 0xbb1111, // Rojo más oscuro base
-                shininess: 100,        // Brillo húmedo aumentado
-                specular: 0xff9999,   // Specular rosado
-                emissive: 0x220000,   // Emisión leve
+                color: 0xbb1111,
+                shininess: 100,
+                specular: 0xff9999,
+                emissive: 0x220000,
                 bumpMap: texture,
-                bumpScale: 0.08,      // Relieve más visible
+                bumpScale: 0.08,
             });
             
             const arterySphere = new THREE.Mesh(sphereGeometry, arteryMaterial);
-            
-            // Escalar: 1 ancho (X), 2 alto (Y), 3 grosor (Z)
             arterySphere.scale.set(1, 2, 3);
-            
-            // Posicionar cerca del jugador para verla bien
             arterySphere.position.set(3, 1.5, -3);
-            
             arterySphere.castShadow = true;
             arterySphere.receiveShadow = true;
-            
             scene.add(arterySphere);
-            
-            console.log("✅ Esfera de arteria creada - Textura 256x256 con filtrado suave");
         }
         
-        // CREAR GLÓBULO ROJO (Eritrocito bicóncavo) - VERSIÓN SIMPLIFICADA
         function createRedBloodCell() {
-            console.log("🩸 Creando glóbulo rojo...");
-            
-            // 1. CREAR GEOMETRÍA BASE
             const geometry = new THREE.SphereGeometry(0.5, 32, 16);
             const positions = geometry.attributes.position;
             
-            console.log("📐 Geometría creada, vértices:", positions.count);
-            
-            // 2. MODIFICAR VÉRTICES para forma bicóncava
             for (let i = 0; i < positions.count; i++) {
                 const x = positions.getX(i);
                 const y = positions.getY(i);
                 const z = positions.getZ(i);
-                
-                // Distancia desde el centro en plano XZ
                 const r = Math.sqrt(x * x + z * z);
-                
-                // Factor de hundimiento bicóncavo
                 const k = 1.5;
                 const factor = 1.0 - (r * k) * (r * k);
                 
-                // Aplicar hundimiento
                 let newY = y;
                 if (factor > 0) {
                     newY = y * factor * 0.3;
@@ -651,9 +660,7 @@
             }
             
             geometry.computeVertexNormals();
-            console.log("✅ Geometría bicóncava aplicada");
             
-            // 3. MATERIAL SIMPLE (sin textura primero)
             const material = new THREE.MeshPhongMaterial({
                 color: 0xcc1111,
                 shininess: 20,
@@ -661,22 +668,13 @@
                 side: THREE.DoubleSide
             });
             
-            // 4. CREAR MESH
             const redBloodCell = new THREE.Mesh(geometry, material);
-            
-            // Posicionar MUY CERCA del jugador para verlo seguro
             redBloodCell.position.set(-1.5, 1.0, 2);
-            
-            // Rotación para ver forma
             redBloodCell.rotation.x = Math.PI / 4;
-            
             redBloodCell.castShadow = true;
             redBloodCell.receiveShadow = true;
-            
             scene.add(redBloodCell);
             window.redBloodCell = redBloodCell;
-            
-            console.log("✅ Glóbulo rojo añadido en posición:", redBloodCell.position);
         }
         
         function jump() {
@@ -694,10 +692,8 @@
             bullet.position.copy(camera.position);
             bullet.castShadow = true;
             
-            // Dirección de disparo basada en la cámara
             const direction = new THREE.Vector3();
             camera.getWorldDirection(direction);
-            
             bullet.userData.velocity = direction.multiplyScalar(0.5);
             
             scene.add(bullet);
@@ -705,29 +701,26 @@
         }
         
         function updatePlayer() {
-            // Movimiento desde teclado (PC)
             const moveVector = new THREE.Vector3();
             
+            // Teclado
             if (moveState.forward) moveVector.z -= 1;
             if (moveState.backward) moveVector.z += 1;
             if (moveState.left) moveVector.x -= 1;
             if (moveState.right) moveVector.x += 1;
             
-            // Movimiento desde joystick (Mobile)
-            // Y invertido porque en pantalla Y+ es hacia abajo
+            // ✅ JOYSTICK - CON INVERSIÓN CORRECTA DEL EJE Y
             moveVector.x += joystick.inputX;
-            moveVector.z += joystick.inputY;
+            moveVector.z += joystick.inputY; // ✅ Invertido: joystick Y+ = pantalla abajo = mover adelante
             
             if (moveVector.length() > 0) {
                 moveVector.normalize();
                 
-                // Aplicar rotación de cámara al movimiento
                 const rotatedMove = moveVector.applyAxisAngle(new THREE.Vector3(0, 1, 0), rotationY);
                 
                 player.position.x += rotatedMove.x * PLAYER_SPEED;
                 player.position.z += rotatedMove.z * PLAYER_SPEED;
                 
-                // Limitar al terreno
                 const halfGround = GROUND_SIZE / 2 - 0.5;
                 player.position.x = Math.max(-halfGround, Math.min(halfGround, player.position.x));
                 player.position.z = Math.max(-halfGround, Math.min(halfGround, player.position.z));
@@ -758,14 +751,12 @@
                 
                 bullet.position.add(bullet.userData.velocity);
                 
-                // Verificar colisión con la caja
                 const distance = bullet.position.distanceTo(targetBox.position);
                 if (distance < 0.6 && !targetBox.userData.isHit) {
                     targetBox.material.color.setHex(0x00ff00);
                     targetBox.userData.isHit = true;
                 }
                 
-                // Eliminar balas fuera de rango
                 if (bullet.position.length() > 50) {
                     scene.remove(bullet);
                     bullets.splice(i, 1);
@@ -776,7 +767,6 @@
         function animate() {
             requestAnimationFrame(animate);
             
-            // Animar glóbulo rojo (rotación tumbling)
             if (window.redBloodCell) {
                 window.redBloodCell.rotation.x += 0.005;
                 window.redBloodCell.rotation.y += 0.008;
@@ -788,7 +778,6 @@
             renderer.render(scene, camera);
         }
         
-        // Iniciar
         init();
     </script>
 </body>
