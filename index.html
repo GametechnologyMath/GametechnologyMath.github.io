@@ -3,33 +3,93 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Juego Anatomia 3D - 06-NOVIEMBRE</title>
+    <title>JUEGO EJERCITO CELULAR</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-        
         body {
             overflow: hidden;
             font-family: Arial, sans-serif;
-            /* FIX: Remover touch-action: none global */
         }
-        
-        #canvas {
-            display: block;
-            width: 100%;
+        #canvas-container {
+            width: 100vw;
             height: 100vh;
-            touch-action: pan-y pan-x; /*  Permitir touch en canvas */
+            touch-action: pan-y pan-x;
         }
         
-        .controls {
+        /* DEBUG INFO */
+        #debug {
             position: fixed;
-            z-index: 100;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.7);
+            color: lime;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 12px;
+            z-index: 200;
+            border-radius: 5px;
+            max-width: 200px;
         }
         
-        /* JOYSTICK ESTÁTICO */
+        /* CROSSHAIR */
+        #crosshair {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 30px;
+            height: 30px;
+            pointer-events: none;
+            z-index: 50;
+        }
+        #crosshair::before,
+        #crosshair::after {
+            content: '';
+            position: absolute;
+            background: white;
+            box-shadow: 0 0 3px rgba(0,0,0,0.8);
+        }
+        #crosshair::before {
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 2px;
+            transform: translateY(-50%);
+        }
+        #crosshair::after {
+            left: 50%;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            transform: translateX(-50%);
+        }
+        
+        /* FULLSCREEN BUTTON */
+        #fullscreen-btn {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            border: 2px solid white;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            z-index: 1000;
+            font-weight: bold;
+        }
+        #fullscreen-btn:hover {
+            background: rgba(0, 0, 0, 0.9);
+        }
+        
+        /* JOYSTICK CONTAINER */
         .joystick-container {
             position: fixed;
             bottom: 80px;
@@ -37,9 +97,8 @@
             width: 140px;
             height: 140px;
             z-index: 100;
-            touch-action: none; /* Solo bloquear en joystick */
+            touch-action: none;
         }
-        
         .joystick-base {
             position: absolute;
             width: 140px;
@@ -49,7 +108,6 @@
             border-radius: 50%;
             box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
         }
-        
         .joystick-stick {
             position: absolute;
             width: 60px;
@@ -63,12 +121,10 @@
             transition: all 0.1s ease-out;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
         }
-        
         .joystick-stick.active {
             background: rgba(255, 255, 255, 0.95);
             box-shadow: 0 3px 12px rgba(0, 0, 0, 0.5);
         }
-        
         .joystick-deadzone {
             position: absolute;
             width: 28px;
@@ -81,13 +137,15 @@
             pointer-events: none;
         }
         
+        /* ACTION BUTTONS */
         .action-controls {
+            position: fixed;
             bottom: 20px;
             right: 20px;
             display: flex;
             gap: 15px;
+            z-index: 100;
         }
-        
         .action-btn {
             width: 90px;
             height: 90px;
@@ -102,93 +160,64 @@
             align-items: center;
             justify-content: center;
             text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
-            touch-action: none; /* Bloquear en botones */
+            touch-action: none;
         }
-        
         #btn-jump {
             background: rgb(0, 255, 0);
         }
-        
         #btn-shoot {
             background: rgb(200, 100, 50);
         }
-        
         .action-btn:active {
             transform: scale(0.95);
             opacity: 0.8;
         }
         
-        #fullscreen-btn {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: rgba(0, 0, 0, 0.5);
-            color: white;
-            border: 2px solid white;
-            border-radius: 8px;
-            padding: 10px 20px;
-            cursor: pointer;
-            z-index: 100;
-            font-weight: bold;
-        }
-        
-        #crosshair {
-            position: fixed;
+        /* INSTRUCTIONS */
+        #instructions {
+            position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            width: 30px;
-            height: 30px;
-            pointer-events: none;
-            z-index: 50;
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            z-index: 999;
+            max-width: 90%;
         }
-        
-        #crosshair::before,
-        #crosshair::after {
-            content: '';
-            position: absolute;
-            background: white;
-            box-shadow: 0 0 3px rgba(0,0,0,0.8);
+        #instructions h2 {
+            margin-bottom: 20px;
         }
-        
-        #crosshair::before {
-            top: 50%;
-            left: 0;
-            right: 0;
-            height: 2px;
-            transform: translateY(-50%);
+        #instructions p {
+            margin: 10px 0;
         }
-        
-        #crosshair::after {
-            left: 50%;
-            top: 0;
-            bottom: 0;
-            width: 2px;
-            transform: translateX(-50%);
-        }
-
-        /* ✅ DEBUG INFO */
-        #debug {
-            position: fixed;
-            top: 10px;
-            left: 10px;
-            background: rgba(0,0,0,0.7);
-            color: lime;
-            padding: 10px;
-            font-family: monospace;
-            font-size: 12px;
-            z-index: 200;
+        #instructions button {
+            margin-top: 20px;
+            padding: 10px 30px;
+            background: #4CAF50;
+            color: white;
+            border: none;
             border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        #instructions button:hover {
+            background: #45a049;
+        }
+        .hidden {
+            display: none;
         }
     </style>
 </head>
 <body>
-    <canvas id="canvas"></canvas>
+    <div id="canvas-container"></div>
     
     <div id="crosshair"></div>
     <div id="debug"></div>
     
-    <button id="fullscreen-btn">PANTALLA COMPLETA</button>
+    <button id="fullscreen-btn">Pantalla Completa</button>
     
     <div class="joystick-container">
         <div class="joystick-base"></div>
@@ -196,159 +225,311 @@
         <div class="joystick-stick" id="joystick-stick"></div>
     </div>
     
-    <div class="controls action-controls">
+    <div class="action-controls">
         <button class="action-btn" id="btn-jump">SALTAR</button>
         <button class="action-btn" id="btn-shoot">DISPARAR</button>
     </div>
+    
+    <div id="instructions">
+        <h2>BIENVENIDO</h2>
+        <h2>PROYECTO: EJERCITO CELULAR</h2>
+        <p><strong>PC:</strong> WASD + Mouse + Clic</p>
+        <p><strong>Móvil:</strong> Joystick + Botones</p>
+        <p><strong>FASE:</strong> PROTOTIPO 0.700</p>
+        <p><strong>“Prepárate para la guerra”</strong> - Mirar alrededor</p>
+        <button id="start-btn"> NUEVA PARTIDA</button>
+    </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script>
-        let scene, camera, renderer;
-        let player, targetBox, ground;
-        let bullets = [];
-        let playerVelocity = { x: 0, y: 0, z: 0 };
-        let isJumping = false;
-        let moveState = { forward: false, backward: false, left: false, right: false };
+        // Variables globales
+        let scene, camera, renderer, world;
+        let playerBody, groundBody;
+        let boxes = [];
+        let spheres = [];
+        let keys = {};
+        let canJump = false;
+        let mouseMovementX = 0, mouseMovementY = 0;
+        let yaw = 0, pitch = 0;
+        let isPointerLocked = false;
+        let isFullscreen = false;
         
-        const PLAYER_SPEED = 0.15;
-        const JUMP_FORCE = 0.3;
-        const GRAVITY = 0.015;
-        const PLAYER_HEIGHT = 1.6;
-        const GROUND_SIZE = 20;
-        
-        let mouseX = 0, mouseY = 0;
-        let rotationX = 0, rotationY = 0;
+        // Variables touch
         let touchStartX = 0, touchStartY = 0;
-        let isTouching = false;
+        let isTouchingScreen = false;
         
-        // ✅ JOYSTICK MEJORADO
+        // Joystick mejorado con tracking de touch
         let joystick = {
             active: false,
-            touchId: null, //  Nuevo: trackear el touch específico
+            touchId: null,
             centerX: 0,
             centerY: 0,
             currentX: 0,
             currentY: 0,
             maxRadius: 70,
             deadZone: 14,
-            stickRadius: 30,
             inputX: 0,
             inputY: 0
         };
-        
+
+        // Configuración inicial
         function init() {
+            // Three.js Scene
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0x87CEEB);
-            
+            scene.fog = new THREE.Fog(0x87CEEB, 0, 50);
+
+            // Camera
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            
-            const canvas = document.getElementById('canvas');
-            renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+            camera.position.set(0, 1.6, 0);
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.shadowMap.enabled = true;
-            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-            
+            document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+            // Luz
             const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
             scene.add(ambientLight);
-            
             const directionalLight = new THREE.DirectionalLight(0xffffff, 0.6);
             directionalLight.position.set(10, 20, 10);
             directionalLight.castShadow = true;
-            directionalLight.shadow.camera.left = -20;
-            directionalLight.shadow.camera.right = 20;
-            directionalLight.shadow.camera.top = 20;
-            directionalLight.shadow.camera.bottom = -20;
-            directionalLight.shadow.mapSize.width = 2048;
-            directionalLight.shadow.mapSize.height = 2048;
             scene.add(directionalLight);
-            
-            const groundGeometry = new THREE.PlaneGeometry(GROUND_SIZE, GROUND_SIZE);
+
+            // Cannon.js World
+            world = new CANNON.World();
+            world.gravity.set(0, -9.82, 0);
+            world.broadphase = new CANNON.NaiveBroadphase();
+            world.solver.iterations = 10;
+
+            // Suelo
+            const groundGeometry = new THREE.PlaneGeometry(30, 30);
             const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x00ff00 });
-            ground = new THREE.Mesh(groundGeometry, groundMaterial);
-            ground.rotation.x = -Math.PI / 2;
-            ground.receiveShadow = true;
-            scene.add(ground);
+            const groundMesh = new THREE.Mesh(groundGeometry, groundMaterial);
+            groundMesh.rotation.x = -Math.PI / 2;
+            groundMesh.receiveShadow = true;
+            scene.add(groundMesh);
+
+            const groundShape = new CANNON.Plane();
+            groundBody = new CANNON.Body({ mass: 0 });
+            groundBody.addShape(groundShape);
+            groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
+            world.addBody(groundBody);
+
+            // Jugador
+            const playerShape = new CANNON.Sphere(0.5);
+            playerBody = new CANNON.Body({ mass: 80 });
+            playerBody.addShape(playerShape);
+            playerBody.position.set(0, 1.6, 0);
+            playerBody.linearDamping = 0.9;
+            playerBody.fixedRotation = true;
+            world.addBody(playerBody);
+
+            // Cargar fuente DEL TEXTO 3D
+                        const loader = new THREE.FontLoader();
+                        loader.load(
+                        'https://threejs.org/examples/fonts/helvetiker_regular.typeface.json',
+                        function (font) {
+
+                            const palabra = "EJERCITO";
+                            const letras = [];
+                            const group = new THREE.Group(); // Contendrá las letras
+
+                            // Crear cada letra como un Mesh independiente
+                            for (let i = 0; i < palabra.length; i++) {
+                            const char = palabra[i];
+                            const geometry = new THREE.TextGeometry(char, {
+                                font: font,
+                                size: 1,
+                                height: 0.3,
+                                curveSegments: 12,
+                                bevelEnabled: true,
+                                bevelThickness: 0.05,
+                                bevelSize: 0.02,
+                                bevelSegments: 5
+                            });
+
+                            geometry.center(); // centra cada letra individualmente
+
+                            const material = new THREE.MeshStandardMaterial({
+                                color: 0x0077ff,
+                                metalness: 0.2,
+                                roughness: 0.3
+                            });
+
+                            const mesh = new THREE.Mesh(geometry, material);
+                            mesh.position.x = i * 1.2; // separación horizontal
+                            letras.push(mesh);
+                            group.add(mesh);
+                            }
+
+                            // ✅ Centrar el grupo visualmente en el eje X
+                            group.position.x = -((palabra.length - 1) * 1.2) / 2;
+                            group.position.y = 0;
+                            
+                            // ✅ Crear pivot centrado
+                            const pivot = new THREE.Group();
+                            pivot.add(group);
+                            pivot.position.set(0, 3, -6); // X, Y, Z del pivot
+                            scene.add(pivot);
+
+                            // Animación del texto
+                            function animate(time) {
+                            requestAnimationFrame(animate);
+                            const t = time * 0.002; // velocidad del tiempo
+
+                            // Movimiento tipo ola
+                            letras.forEach((letra, i) => {
+                                letra.position.y = Math.sin(t + i * 0.5) * 0.4;
+                                letra.rotation.y = Math.sin(t + i * 0.3) * 0.2;
+                            });
+
+                            // ✅ Rotar el pivot, no el grupo
+                            pivot.rotation.y += 0.0008;
+
+                            renderer.render(scene, camera);
+                            }
+
+                            animate();
+                        }
+                        );
+
+            // Cajas azules
+            createBox(-5, 1, 2);
+            createBox(5, 1, 4);
+            createBox(0, 1, -8);
             
-            const boxGeometry = new THREE.BoxGeometry(1, 1, 1);
-            const boxMaterial = new THREE.MeshLambertMaterial({ color: 0xffff00 });
-            targetBox = new THREE.Mesh(boxGeometry, boxMaterial);
-            targetBox.position.set(0, 0.5, -5);
-            targetBox.castShadow = true;
-            targetBox.receiveShadow = true;
-            targetBox.userData.isHit = false;
-            scene.add(targetBox);
-            
-            try {
-                createArterySphere();
-            } catch(e) {
-                console.error("Error creando arteria:", e);
-            }
-            
-            try {
-                createRedBloodCell();
-            } catch(e) {
-                console.error("Error creando glóbulo rojo:", e);
-            }
-            
-            const playerGeometry = new THREE.BoxGeometry(0.5, PLAYER_HEIGHT, 0.5);
-            const playerMaterial = new THREE.MeshBasicMaterial({ visible: false });
-            player = new THREE.Mesh(playerGeometry, playerMaterial);
-            player.position.set(0, PLAYER_HEIGHT / 2, 5);
-            scene.add(player);
-            
-            camera.position.copy(player.position);
-            camera.position.y += PLAYER_HEIGHT / 2;
-            
+            // Objeto 3D con textura procedural
+            createCustomObject();
+
+            // Event listeners
             setupControls();
-            animate();
+            updateJoystickCenter();
+            
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function createBox(x, y, z) {
+            const size = 1;
+            const boxGeometry = new THREE.BoxGeometry(size, size, size);
+            const boxMaterial = new THREE.MeshLambertMaterial({ color: 0x0000ff });
+            const boxMesh = new THREE.Mesh(boxGeometry, boxMaterial);
+            boxMesh.castShadow = true;
+            boxMesh.receiveShadow = true;
+            scene.add(boxMesh);
+
+            const boxShape = new CANNON.Box(new CANNON.Vec3(size / 2, size / 2, size / 2));
+            const boxBody = new CANNON.Body({ mass: 5 });
+            boxBody.addShape(boxShape);
+            boxBody.position.set(x, y, z);
+            world.addBody(boxBody);
+
+            boxes.push({ mesh: boxMesh, body: boxBody });
         }
         
-        function setupControls() {
-            document.addEventListener('keydown', (e) => {
-                switch(e.key.toLowerCase()) {
-                    case 'w': case 'arrowup': moveState.forward = true; break;
-                    case 's': case 'arrowdown': moveState.backward = true; break;
-                    case 'a': case 'arrowleft': moveState.left = true; break;
-                    case 'd': case 'arrowright': moveState.right = true; break;
-                    case ' ': 
-                        e.preventDefault();
-                        jump(); 
-                        break;
-                }
-            });
+        function createCustomObject() {
+            const vertices = new Float32Array([
+                1.0, 0.9, -0.6, 1.0, -1.0, -0.6, -0.9, 0.9, -0.6,
+                -0.9, -1.0, -0.6, 0.6, 0.0, -0.01, 0.0, -0.5, 0.0,
+                0.1, 0.4, 0.0, -0.4, 0.0, 0.0, 1.0, 0.0, 0.4,
+                -0.1, -1.0, 0.4, -0.05, 1.1, 0.43, -1.2, 0.1, 0.4,
+                -0.3, 0.1, 0.8
+            ]);
+
+            const indices = new Uint16Array([
+                0, 2, 6, 0, 6, 4, 1, 3, 2, 1, 2, 0,
+                6, 7, 11, 6, 11, 10, 3, 1, 5, 3, 5, 7,
+                2, 3, 7, 2, 7, 6, 1, 0, 4, 1, 4, 5,
+                8, 10, 12, 7, 5, 9, 7, 9, 11, 4, 6, 10,
+                4, 10, 8, 5, 4, 8, 5, 8, 9, 9, 8, 12,
+                10, 11, 12, 11, 9, 12
+            ]);
             
-            document.addEventListener('keyup', (e) => {
-                switch(e.key.toLowerCase()) {
-                    case 'w': case 'arrowup': moveState.forward = false; break;
-                    case 's': case 'arrowdown': moveState.backward = false; break;
-                    case 'a': case 'arrowleft': moveState.left = false; break;
-                    case 'd': case 'arrowright': moveState.right = false; break;
-                }
-            });
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+            geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+            geometry.computeVertexNormals();
             
-            document.addEventListener('mousemove', (e) => {
-                if (document.pointerLockElement === document.body) {
-                    mouseX = e.movementX || 0;
-                    mouseY = e.movementY || 0;
+            // Textura procedural
+            const textureSize = 256;
+            const canvas = document.createElement('canvas');
+            canvas.width = textureSize;
+            canvas.height = textureSize;
+            const ctx = canvas.getContext('2d');
+            const imageData = ctx.createImageData(textureSize, textureSize);
+            const data = imageData.data;
+
+            function noise2D(x, y) {
+                const n1 = Math.sin(x * 0.1) * Math.cos(y * 0.1);
+                const n2 = Math.sin(x * 0.3 + y * 0.2) * 0.5;
+                const n3 = Math.sin(x * 0.7 - y * 0.5) * 0.25;
+                return n1 + n2 + n3;
+            }
+
+            for (let y = 0; y < textureSize; y++) {
+                for (let x = 0; x < textureSize; x++) {
+                    const i = (y * textureSize + x) * 4;
+                    const noise = noise2D(x, y) + (Math.random() - 0.5) * 0.15;
+                    const veinPattern = Math.abs(Math.sin(x * 0.15 + noise * 2)) * 
+                                        Math.abs(Math.cos(y * 0.12 + noise * 1.5));
+                    const veinDark = veinPattern < 0.3 ? -20 : 0;
                     
-                    rotationY -= mouseX * 0.002;
-                    rotationX -= mouseY * 0.002;
-                    rotationX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, rotationX));
+                    const r = Math.floor(200 + noise * 25 + veinDark);
+                    const g = Math.floor(30 + noise * 12 + veinDark * 0.5);
+                    const b = Math.floor(30 + noise * 8 + veinDark * 0.3);
+                    
+                    data[i] = Math.max(0, Math.min(255, r));
+                    data[i + 1] = Math.max(0, Math.min(255, g));
+                    data[i + 2] = Math.max(0, Math.min(255, b));
+                    data[i + 3] = 255;
                 }
+            }
+
+            ctx.putImageData(imageData, 0, 0);
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.wrapS = THREE.RepeatWrapping;
+            texture.wrapT = THREE.RepeatWrapping;
+            texture.repeat.set(2, 2);
+
+            const material = new THREE.MeshPhongMaterial({
+                map: texture,
+                color: 0xffffff,
+                shininess: 80,
+                specular: 0xff9999,
+                emissive: 0x220000,
+                bumpMap: texture,
+                bumpScale: 0.05,
+                side: THREE.DoubleSide
             });
             
-            document.addEventListener('click', () => {
-                if (document.pointerLockElement !== document.body) {
-                    document.body.requestPointerLock();
-                } else {
-                    shoot();
-                }
-            });
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.set(-3, 2, 0);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            scene.add(mesh);
+
+            // Física con caja aproximada
+            const boxShape = new CANNON.Box(new CANNON.Vec3(0.6, 1, 0.5));
+            const body = new CANNON.Body({ mass: 5 });
+            body.addShape(boxShape);
+            body.position.set(-3, 2, 0);
+            world.addBody(body);
+            boxes.push({ mesh: mesh, body: body });
+        }
+
+        function setupControls() {
+            // Teclado
+            document.addEventListener('keydown', onKeyDown);
+            document.addEventListener('keyup', onKeyUp);
             
-            // ✅ JOYSTICK SETUP MEJORADO
+            // Mouse
+            document.addEventListener('mousemove', onMouseMove);
+            
+            // Joystick
             setupJoystick();
             
-            const canvas = document.getElementById('canvas');
+            // Touch en canvas (para mirar alrededor)
+            const canvas = renderer.domElement;
             canvas.addEventListener('touchstart', (e) => {
                 const touch = e.touches[0];
                 const screenCenterX = window.innerWidth / 2;
@@ -356,22 +537,22 @@
                 
                 if (touch.clientY < screenCenterY && 
                     Math.abs(touch.clientX - screenCenterX) < window.innerWidth / 3) {
-                    isTouching = true;
+                    isTouchingScreen = true;
                     touchStartX = touch.clientX;
                     touchStartY = touch.clientY;
                 }
             });
             
             canvas.addEventListener('touchmove', (e) => {
-                if (isTouching && e.touches.length === 1) {
+                if (isTouchingScreen && e.touches.length === 1) {
                     e.preventDefault();
                     const touch = e.touches[0];
                     const deltaX = touch.clientX - touchStartX;
                     const deltaY = touch.clientY - touchStartY;
                     
-                    rotationY -= deltaX * 0.005;
-                    rotationX -= deltaY * 0.005;
-                    rotationX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, rotationX));
+                    yaw -= deltaX * 0.005;
+                    pitch -= deltaY * 0.005;
+                    pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
                     
                     touchStartX = touch.clientX;
                     touchStartY = touch.clientY;
@@ -379,9 +560,10 @@
             });
             
             canvas.addEventListener('touchend', () => {
-                isTouching = false;
+                isTouchingScreen = false;
             });
             
+            // Botones
             document.getElementById('btn-jump').addEventListener('touchstart', (e) => {
                 e.preventDefault();
                 jump();
@@ -389,67 +571,37 @@
             
             document.getElementById('btn-shoot').addEventListener('touchstart', (e) => {
                 e.preventDefault();
-                shoot();
+                onShoot();
             });
             
-            document.getElementById('fullscreen-btn').addEventListener('click', () => {
-                if (!document.fullscreenElement) {
-                    document.documentElement.requestFullscreen();
-                } else {
-                    document.exitFullscreen();
-                }
-            });
+            document.getElementById('start-btn').addEventListener('click', startGame);
+            document.getElementById('fullscreen-btn').addEventListener('click', toggleFullscreen);
             
-            window.addEventListener('resize', () => {
-                camera.aspect = window.innerWidth / window.innerHeight;
-                camera.updateProjectionMatrix();
-                renderer.setSize(window.innerWidth, window.innerHeight);
-                // ✅ Recalcular centro del joystick al cambiar tamaño
-                updateJoystickCenter();
-            });
+            document.addEventListener('fullscreenchange', onFullscreenChange);
+            document.addEventListener('webkitfullscreenchange', onFullscreenChange);
         }
         
-        // ✅ FUNCIÓN PARA ACTUALIZAR EL CENTRO DEL JOYSTICK
-        function updateJoystickCenter() {
-            const joystickContainer = document.querySelector('.joystick-container');
-            const rect = joystickContainer.getBoundingClientRect();
-            joystick.centerX = rect.left + rect.width / 2;
-            joystick.centerY = rect.top + rect.height / 2;
-            console.log('Joystick center updated:', joystick.centerX, joystick.centerY);
-        }
-        
-        // ✅ SETUP JOYSTICK TOTALMENTE REESCRITO
         function setupJoystick() {
             const joystickContainer = document.querySelector('.joystick-container');
             const joystickStick = document.getElementById('joystick-stick');
             
-            // ✅ Calcular centro inicial
-            updateJoystickCenter();
-            
-            // ✅ Touch Start - CON TRACKING DE TOUCH ID
             joystickContainer.addEventListener('touchstart', (e) => {
                 e.preventDefault();
-                e.stopPropagation(); // ✅ Evitar propagación
+                e.stopPropagation();
                 
                 const touch = e.changedTouches[0];
                 joystick.active = true;
-                joystick.touchId = touch.identifier; // ✅ Guardar ID del touch
+                joystick.touchId = touch.identifier;
                 joystickStick.classList.add('active');
-                
-                // ✅ Recalcular centro en cada touch (por si acaso)
                 updateJoystickCenter();
-                
                 handleJoystickMove(touch);
-                console.log('Joystick START, touchId:', joystick.touchId);
             }, { passive: false });
             
-            // ✅ Touch Move - BUSCAR EL TOUCH CORRECTO
             joystickContainer.addEventListener('touchmove', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 
                 if (joystick.active) {
-                    // ✅ Buscar el touch correcto por ID
                     for (let i = 0; i < e.changedTouches.length; i++) {
                         const touch = e.changedTouches[i];
                         if (touch.identifier === joystick.touchId) {
@@ -460,7 +612,6 @@
                 }
             }, { passive: false });
             
-            // ✅ Touch End - VERIFICAR QUE SEA EL TOUCH CORRECTO
             joystickContainer.addEventListener('touchend', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -469,7 +620,6 @@
                     const touch = e.changedTouches[i];
                     if (touch.identifier === joystick.touchId) {
                         resetJoystick();
-                        console.log('Joystick END');
                         break;
                     }
                 }
@@ -480,7 +630,7 @@
                 resetJoystick();
             }, { passive: false });
             
-            // Mouse events (para PC)
+            // Mouse para PC
             joystickContainer.addEventListener('mousedown', (e) => {
                 joystick.active = true;
                 joystickStick.classList.add('active');
@@ -500,9 +650,14 @@
             });
         }
         
-        // ✅ HANDLE JOYSTICK MOVE MEJORADO
+        function updateJoystickCenter() {
+            const joystickContainer = document.querySelector('.joystick-container');
+            const rect = joystickContainer.getBoundingClientRect();
+            joystick.centerX = rect.left + rect.width / 2;
+            joystick.centerY = rect.top + rect.height / 2;
+        }
+        
         function handleJoystickMove(input) {
-            // ✅ Extraer coordenadas correctamente (Touch o Mouse)
             const clientX = input.clientX !== undefined ? input.clientX : input.pageX;
             const clientY = input.clientY !== undefined ? input.clientY : input.pageY;
             
@@ -511,7 +666,6 @@
             
             let distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
             
-            // Limitar al radio máximo
             if (distance > joystick.maxRadius) {
                 const angle = Math.atan2(deltaY, deltaX);
                 deltaX = Math.cos(angle) * joystick.maxRadius;
@@ -522,7 +676,6 @@
             joystick.currentX = deltaX;
             joystick.currentY = deltaY;
             
-            // Dead zone
             if (distance < joystick.deadZone) {
                 joystick.inputX = 0;
                 joystick.inputY = 0;
@@ -536,17 +689,15 @@
                 joystick.inputY = Math.sin(angle) * normalizedDistance;
             }
             
-            // Actualizar visual
             const stick = document.getElementById('joystick-stick');
             stick.style.transform = `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px))`;
             
-            // ✅ Debug
             updateDebug();
         }
         
         function resetJoystick() {
             joystick.active = false;
-            joystick.touchId = null; // ✅ Reset touch ID
+            joystick.touchId = null;
             joystick.currentX = 0;
             joystick.currentY = 0;
             joystick.inputX = 0;
@@ -559,226 +710,214 @@
             updateDebug();
         }
         
-        // ✅ DEBUG INFO
         function updateDebug() {
             const debug = document.getElementById('debug');
             debug.innerHTML = `
-                Active: ${joystick.active}<br>
+                JUEGO: EJERCITO CELULAR
+                Joystick: ${joystick.active ? 'ENCENDIDO' : 'APAGADO'}<br>
                 X: ${joystick.inputX.toFixed(2)}<br>
                 Y: ${joystick.inputY.toFixed(2)}<br>
-                Center: ${joystick.centerX.toFixed(0)}, ${joystick.centerY.toFixed(0)}
+                Posicion: ${playerBody.position.x.toFixed(1)}, ${playerBody.position.y.toFixed(1)}, ${playerBody.position.z.toFixed(1)}<br>
+                Saltar: ${canJump}<br>
+                Balas: ${spheres.length}
             `;
         }
-        
-        function createArterySphere() {
-            const sphereGeometry = new THREE.SphereGeometry(1, 64, 64);
-            const textureSize = 256;
-            const canvas = document.createElement('canvas');
-            canvas.width = textureSize;
-            canvas.height = textureSize;
-            const ctx = canvas.getContext('2d');
+
+        function startGame() {
+            document.getElementById('instructions').classList.add('hidden');
+            renderer.domElement.requestPointerLock = renderer.domElement.requestPointerLock ||
+                                                      renderer.domElement.mozRequestPointerLock ||
+                                                      renderer.domElement.webkitRequestPointerLock;
+            renderer.domElement.requestPointerLock();
+
+            document.addEventListener('pointerlockchange', onPointerLockChange);
+            document.addEventListener('mozpointerlockchange', onPointerLockChange);
+            document.addEventListener('webkitpointerlockchange', onPointerLockChange);
             
-            const imageData = ctx.createImageData(textureSize, textureSize);
-            const data = imageData.data;
-            
-            function noise2D(x, y) {
-                const n1 = Math.sin(x * 0.1) * Math.cos(y * 0.1);
-                const n2 = Math.sin(x * 0.3 + y * 0.2) * 0.5;
-                const n3 = Math.sin(x * 0.7 - y * 0.5) * 0.25;
-                const n4 = Math.sin(x * 1.3 + y * 1.1) * 0.125;
-                return n1 + n2 + n3 + n4;
-            }
-            
-            for (let y = 0; y < textureSize; y++) {
-                for (let x = 0; x < textureSize; x++) {
-                    const i = (y * textureSize + x) * 4;
-                    const noise = noise2D(x, y) + (Math.random() - 0.5) * 0.15;
-                    const veinPattern = Math.abs(Math.sin(x * 0.15 + noise * 2)) * 
-                                       Math.abs(Math.cos(y * 0.12 + noise * 1.5));
-                    const veinDark = veinPattern < 0.3 ? -20 : 0;
-                    
-                    const r = Math.floor(200 + noise * 25 + veinDark);
-                    const g = Math.floor(30 + noise * 12 + veinDark * 0.5);
-                    const b = Math.floor(30 + noise * 8 + veinDark * 0.3);
-                    
-                    data[i] = Math.max(0, Math.min(255, r));
-                    data[i + 1] = Math.max(0, Math.min(255, g));
-                    data[i + 2] = Math.max(0, Math.min(255, b));
-                    data[i + 3] = 255;
-                }
-            }
-            
-            ctx.putImageData(imageData, 0, 0);
-            
-            const texture = new THREE.CanvasTexture(canvas);
-            texture.wrapS = THREE.RepeatWrapping;
-            texture.wrapT = THREE.RepeatWrapping;
-            texture.repeat.set(4, 4);
-            texture.minFilter = THREE.LinearMipmapLinearFilter;
-            texture.magFilter = THREE.LinearFilter;
-            texture.anisotropy = renderer.capabilities.getMaxAnisotropy();
-            texture.generateMipmaps = true;
-            
-            const arteryMaterial = new THREE.MeshPhongMaterial({
-                map: texture,
-                color: 0xbb1111,
-                shininess: 100,
-                specular: 0xff9999,
-                emissive: 0x220000,
-                bumpMap: texture,
-                bumpScale: 0.08,
-            });
-            
-            const arterySphere = new THREE.Mesh(sphereGeometry, arteryMaterial);
-            arterySphere.scale.set(1, 2, 3);
-            arterySphere.position.set(3, 1.5, -3);
-            arterySphere.castShadow = true;
-            arterySphere.receiveShadow = true;
-            scene.add(arterySphere);
+            renderer.domElement.addEventListener('click', onShoot);
         }
-        
-        function createRedBloodCell() {
-            const geometry = new THREE.SphereGeometry(0.5, 32, 16);
-            const positions = geometry.attributes.position;
+
+        function onPointerLockChange() {
+            isPointerLocked = document.pointerLockElement === renderer.domElement ||
+                             document.mozPointerLockElement === renderer.domElement ||
+                             document.webkitPointerLockElement === renderer.domElement;
+        }
+
+        function onMouseMove(e) {
+            if (!isPointerLocked) return;
             
-            for (let i = 0; i < positions.count; i++) {
-                const x = positions.getX(i);
-                const y = positions.getY(i);
-                const z = positions.getZ(i);
-                const r = Math.sqrt(x * x + z * z);
-                const k = 1.5;
-                const factor = 1.0 - (r * k) * (r * k);
-                
-                let newY = y;
-                if (factor > 0) {
-                    newY = y * factor * 0.3;
-                } else {
-                    newY = y * 0.3;
-                }
-                
-                positions.setY(i, newY);
-            }
+            mouseMovementX = e.movementX || e.mozMovementX || e.webkitMovementX || 0;
+            mouseMovementY = e.movementY || e.mozMovementY || e.webkitMovementY || 0;
+
+            yaw -= mouseMovementX * 0.002;
+            pitch -= mouseMovementY * 0.002;
+            pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
+        }
+
+        function onShoot() {
+            const sphereGeometry = new THREE.SphereGeometry(0.2, 16, 16);
+            const sphereMaterial = new THREE.MeshLambertMaterial({ color: 0xffff00 });
+            const sphereMesh = new THREE.Mesh(sphereGeometry, sphereMaterial);
+            sphereMesh.castShadow = true;
+            scene.add(sphereMesh);
+
+            const sphereShape = new CANNON.Sphere(0.2);
+            const sphereBody = new CANNON.Body({ mass: 1 });
+            sphereBody.addShape(sphereShape);
+            sphereBody.position.copy(playerBody.position);
             
-            geometry.computeVertexNormals();
+            const shootDirection = new THREE.Vector3(0, 0, -1);
+            shootDirection.applyQuaternion(camera.quaternion);
+            const force = 30;
+            sphereBody.velocity.set(
+                shootDirection.x * force,
+                shootDirection.y * force,
+                shootDirection.z * force
+            );
             
-            const material = new THREE.MeshPhongMaterial({
-                color: 0xcc1111,
-                shininess: 20,
-                specular: 0x331111,
-                side: THREE.DoubleSide
-            });
-            
-            const redBloodCell = new THREE.Mesh(geometry, material);
-            redBloodCell.position.set(-1.5, 1.0, 2);
-            redBloodCell.rotation.x = Math.PI / 4;
-            redBloodCell.castShadow = true;
-            redBloodCell.receiveShadow = true;
-            scene.add(redBloodCell);
-            window.redBloodCell = redBloodCell;
+            world.addBody(sphereBody);
+            spheres.push({ mesh: sphereMesh, body: sphereBody, time: Date.now() });
         }
         
         function jump() {
-            if (!isJumping) {
-                playerVelocity.y = JUMP_FORCE;
-                isJumping = true;
+            if (canJump) {
+                playerBody.velocity.y = 6;
+                canJump = false;
             }
         }
-        
-        function shoot() {
-            const bulletGeometry = new THREE.SphereGeometry(0.1, 16, 16);
-            const bulletMaterial = new THREE.MeshLambertMaterial({ color: 0xffff00 });
-            const bullet = new THREE.Mesh(bulletGeometry, bulletMaterial);
-            
-            bullet.position.copy(camera.position);
-            bullet.castShadow = true;
-            
-            const direction = new THREE.Vector3();
-            camera.getWorldDirection(direction);
-            bullet.userData.velocity = direction.multiplyScalar(0.5);
-            
-            scene.add(bullet);
-            bullets.push(bullet);
+
+        function onKeyDown(e) {
+            keys[e.code] = true;
+            if (e.code === 'Space' && isPointerLocked) {
+                e.preventDefault();
+                jump();
+            }
         }
-        
-        function updatePlayer() {
-            const moveVector = new THREE.Vector3();
+
+        function onKeyUp(e) {
+            keys[e.code] = false;
+        }
+
+        function toggleFullscreen() {
+            if (!isFullscreen) {
+                const elem = document.documentElement;
+                if (elem.requestFullscreen) {
+                    elem.requestFullscreen();
+                } else if (elem.mozRequestFullScreen) {
+                    elem.mozRequestFullScreen();
+                } else if (elem.webkitRequestFullscreen) {
+                    elem.webkitRequestFullscreen();
+                } else if (elem.msRequestFullscreen) {
+                    elem.msRequestFullscreen();
+                }
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.mozCancelFullScreen) {
+                    document.mozCancelFullScreen();
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                } else if (document.msExitFullscreen) {
+                    document.msExitFullscreen();
+                }
+            }
+        }
+
+        function onFullscreenChange() {
+            isFullscreen = !!(document.fullscreenElement || 
+                             document.mozFullScreenElement || 
+                             document.webkitFullscreenElement || 
+                             document.msFullscreenElement);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            updateJoystickCenter();
+        }
+
+        function updatePlayer(deltaTime) {
+            const speed = 5;
+            const direction = new THREE.Vector3();
             
             // Teclado
-            if (moveState.forward) moveVector.z -= 1;
-            if (moveState.backward) moveVector.z += 1;
-            if (moveState.left) moveVector.x -= 1;
-            if (moveState.right) moveVector.x += 1;
-            
-            // ✅ JOYSTICK - CON INVERSIÓN CORRECTA DEL EJE Y
-            moveVector.x += joystick.inputX;
-            moveVector.z += joystick.inputY; // ✅ Invertido: joystick Y+ = pantalla abajo = mover adelante
-            
-            if (moveVector.length() > 0) {
-                moveVector.normalize();
-                
-                const rotatedMove = moveVector.applyAxisAngle(new THREE.Vector3(0, 1, 0), rotationY);
-                
-                player.position.x += rotatedMove.x * PLAYER_SPEED;
-                player.position.z += rotatedMove.z * PLAYER_SPEED;
-                
-                const halfGround = GROUND_SIZE / 2 - 0.5;
-                player.position.x = Math.max(-halfGround, Math.min(halfGround, player.position.x));
-                player.position.z = Math.max(-halfGround, Math.min(halfGround, player.position.z));
+            if (keys['KeyW']) direction.z -= 1;
+            if (keys['KeyS']) direction.z += 1;
+            if (keys['KeyA']) direction.x -= 1;
+            if (keys['KeyD']) direction.x += 1;
+
+            // Joystick (invertido el eje Y para movimiento correcto)
+            direction.x += joystick.inputX;
+            direction.z += joystick.inputY; // Joystick hacia abajo = mover adelante
+
+            if (direction.length() > 0) {
+                direction.normalize();
+                direction.applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+                playerBody.velocity.x = direction.x * speed;
+                playerBody.velocity.z = direction.z * speed;
+            } else {
+                playerBody.velocity.x *= 0.9;
+                playerBody.velocity.z *= 0.9;
             }
+
+            // Detección de suelo para saltar
+            const contactNormal = new CANNON.Vec3();
+            const upAxis = new CANNON.Vec3(0, 1, 0);
+            canJump = false;
             
-            // Gravedad
-            playerVelocity.y -= GRAVITY;
-            player.position.y += playerVelocity.y;
-            
-            // Colisión con el suelo
-            if (player.position.y <= PLAYER_HEIGHT / 2) {
-                player.position.y = PLAYER_HEIGHT / 2;
-                playerVelocity.y = 0;
-                isJumping = false;
-            }
-            
+            playerBody.world.contacts.forEach(contact => {
+                if (contact.bi === playerBody || contact.bj === playerBody) {
+                    if (contact.bi === playerBody) {
+                        contact.ni.negate(contactNormal);
+                    } else {
+                        contactNormal.copy(contact.ni);
+                    }
+                    if (contactNormal.dot(upAxis) > 0.5) {
+                        canJump = true;
+                    }
+                }
+            });
+
             // Actualizar cámara
-            camera.position.copy(player.position);
-            camera.position.y += PLAYER_HEIGHT / 2;
-            camera.rotation.order = 'YXZ';
-            camera.rotation.y = rotationY;
-            camera.rotation.x = rotationX;
+            camera.position.copy(playerBody.position);
+            camera.quaternion.setFromEuler(new THREE.Euler(pitch, yaw, 0, 'YXZ'));
         }
-        
-        function updateBullets() {
-            for (let i = bullets.length - 1; i >= 0; i--) {
-                const bullet = bullets[i];
-                
-                bullet.position.add(bullet.userData.velocity);
-                
-                const distance = bullet.position.distanceTo(targetBox.position);
-                if (distance < 0.6 && !targetBox.userData.isHit) {
-                    targetBox.material.color.setHex(0x00ff00);
-                    targetBox.userData.isHit = true;
-                }
-                
-                if (bullet.position.length() > 50) {
-                    scene.remove(bullet);
-                    bullets.splice(i, 1);
-                }
-            }
-        }
-        
+
         function animate() {
             requestAnimationFrame(animate);
-            
-            if (window.redBloodCell) {
-                window.redBloodCell.rotation.x += 0.005;
-                window.redBloodCell.rotation.y += 0.008;
-            }
-            
-            updatePlayer();
-            updateBullets();
-            
+
+            const deltaTime = 1 / 60;
+            world.step(deltaTime);
+
+            updatePlayer(deltaTime);
+
+            // Actualizar cajas
+            boxes.forEach(box => {
+                box.mesh.position.copy(box.body.position);
+                box.mesh.quaternion.copy(box.body.quaternion);
+            });
+
+            // Actualizar esferas y eliminar las antiguas
+            spheres = spheres.filter(sphere => {
+                sphere.mesh.position.copy(sphere.body.position);
+                sphere.mesh.quaternion.copy(sphere.body.quaternion);
+                
+                if (Date.now() - sphere.time > 5000 || sphere.body.position.y < -10) {
+                    scene.remove(sphere.mesh);
+                    world.removeBody(sphere.body);
+                    return false;
+                }
+                return true;
+            });
+
+            updateDebug();
             renderer.render(scene, camera);
         }
-        
+
+        // Iniciar
         init();
+        animate();
     </script>
 </body>
 </html>
