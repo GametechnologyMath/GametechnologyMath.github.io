@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>JUEGO EJERCITO CELULAR</title>
+    <title>Shooter FPS - Móvil</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
     <style>
@@ -179,7 +179,7 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            background: rgba(0, 0, 0, 0.9);
+            background: rgba(1, 46, 83, 0.96);
             color: white;
             padding: 30px;
             border-radius: 10px;
@@ -201,10 +201,11 @@
             border: none;
             border-radius: 5px;
             cursor: pointer;
-            font-size: 16px;
+            font-size: 22px;
+            font-weight: bold;
         }
         #instructions button:hover {
-            background: #45a049;
+            background: #1eb2ec;
         }
         .hidden {
             display: none;
@@ -232,11 +233,11 @@
     
     <div id="instructions">
         <h2>BIENVENIDO</h2>
-        <h2>PROYECTO: EJERCITO CELULAR</h2>
-        <p><strong>PC:</strong> WASD + Mouse + Clic</p>
-        <p><strong>Móvil:</strong> Joystick + Botones</p>
-        <p><strong>FASE:</strong> PROTOTIPO 0.700</p>
-        <p><strong>“Prepárate para la guerra”</strong> - Mirar alrededor</p>
+        <h2>JUEGO EJERCITO CELULAR</h2>
+        <p><strong>PC:</strong> Teclado y Raton</p>
+        <p><strong>Móvil:</strong> Joystick y Botones</p>
+        <p><strong>FASE:</strong> PROTOTIPO 0.701</p>
+        <p><strong>“Prepárate para la batalla”</strong></p>
         <button id="start-btn"> NUEVA PARTIDA</button>
     </div>
 
@@ -256,6 +257,7 @@
         // Variables touch
         let touchStartX = 0, touchStartY = 0;
         let isTouchingScreen = false;
+        let cameraTouchId = null; // CORRECIO ESTA LÍNEA
         
         // Joystick mejorado con tracking de touch
         let joystick = {
@@ -303,8 +305,8 @@
             world.solver.iterations = 10;
 
             // Suelo
-            const groundGeometry = new THREE.PlaneGeometry(30, 30);
-            const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x00ff00 });
+            const groundGeometry = new THREE.PlaneGeometry(80, 80);
+            const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x228B22 });
             const groundMesh = new THREE.Mesh(groundGeometry, groundMaterial);
             groundMesh.rotation.x = -Math.PI / 2;
             groundMesh.receiveShadow = true;
@@ -531,37 +533,57 @@
             // Touch en canvas (para mirar alrededor)
             const canvas = renderer.domElement;
             canvas.addEventListener('touchstart', (e) => {
-                const touch = e.touches[0];
-                const screenCenterX = window.innerWidth / 2;
-                const screenCenterY = window.innerHeight / 2;
-                
-                if (touch.clientY < screenCenterY && 
-                    Math.abs(touch.clientX - screenCenterX) < window.innerWidth / 3) {
-                    isTouchingScreen = true;
-                    touchStartX = touch.clientX;
-                    touchStartY = touch.clientY;
+            //  Recorrer todos los touches nuevos
+                for (let i = 0; i < e.touches.length; i++) {
+                    const touch = e.touches[i];
+                    
+                    if (touch.clientX > window.innerWidth / 2 && !isTouchingScreen) {
+                        isTouchingScreen = true;
+                        cameraTouchId = touch.identifier; // ← Guardar ID
+                        touchStartX = touch.clientX;
+                        touchStartY = touch.clientY;
+                        break;
+                    }
                 }
             });
             
             canvas.addEventListener('touchmove', (e) => {
-                if (isTouchingScreen && e.touches.length === 1) {
-                    e.preventDefault();
-                    const touch = e.touches[0];
-                    const deltaX = touch.clientX - touchStartX;
-                    const deltaY = touch.clientY - touchStartY;
+            if (isTouchingScreen) {
+                e.preventDefault();
+                
+                // ✅ Buscar el touch correcto por ID
+                for (let i = 0; i < e.touches.length; i++) {
+                    const touch = e.touches[i];
                     
-                    yaw -= deltaX * 0.005;
-                    pitch -= deltaY * 0.005;
-                    pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
-                    
-                    touchStartX = touch.clientX;
-                    touchStartY = touch.clientY;
+                    if (touch.identifier === cameraTouchId) {
+                        const deltaX = touch.clientX - touchStartX;
+                        const deltaY = touch.clientY - touchStartY;
+                        
+                        yaw -= deltaX * 0.005;
+                        pitch -= deltaY * 0.005;
+                        pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
+                        
+                        touchStartX = touch.clientX;
+                        touchStartY = touch.clientY;
+                        break;
+                    }
                 }
-            });
+            }
+        });
+            //
+            canvas.addEventListener('touchend', (e) => {
+            // ✅ Verificar si se soltó el touch de la cámara
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                const touch = e.changedTouches[i];
+                
+                if (touch.identifier === cameraTouchId) {
+                    isTouchingScreen = false;
+                    cameraTouchId = null;
+                    break;
+                }
+            }
+        });
             
-            canvas.addEventListener('touchend', () => {
-                isTouchingScreen = false;
-            });
             
             // Botones
             document.getElementById('btn-jump').addEventListener('touchstart', (e) => {
