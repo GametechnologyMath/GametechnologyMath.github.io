@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Shooter FPS - Móvil</title>
+    <title>EJERCITO CELULAR </title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
     <style>
@@ -22,10 +22,36 @@
             touch-action: pan-y pan-x;
         }
         
+        /* HUD - PUNTOS Y TIEMPO */
+        #hud {
+            position: fixed;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 15px 30px;
+            border-radius: 10px;
+            z-index: 150;
+            font-size: 24px;
+            font-weight: bold;
+            text-align: center;
+            border: 3px solid #FFD700;
+        }
+        #score {
+            color: #FFD700;
+            font-size: 32px;
+        }
+        #timer {
+            color: #FF4444;
+            font-size: 28px;
+            margin-top: 5px;
+        }
+        
         /* DEBUG INFO */
         #debug {
             position: fixed;
-            top: 10px;
+            top: 120px;
             left: 10px;
             background: rgba(0,0,0,0.7);
             color: lime;
@@ -189,6 +215,7 @@
         }
         #instructions h2 {
             margin-bottom: 20px;
+            color: #FFD700;
         }
         #instructions p {
             margin: 10px 0;
@@ -207,6 +234,46 @@
         #instructions button:hover {
             background: #1eb2ec;
         }
+        
+        /* GAME OVER SCREEN */
+        #gameover {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.95);
+            color: white;
+            padding: 40px;
+            border-radius: 15px;
+            text-align: center;
+            z-index: 999;
+            border: 5px solid #FFD700;
+        }
+        #gameover h1 {
+            color: #FFD700;
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+        #gameover h2 {
+            color: #4CAF50;
+            font-size: 36px;
+            margin: 20px 0;
+        }
+        #gameover button {
+            margin-top: 20px;
+            padding: 15px 40px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 24px;
+            font-weight: bold;
+        }
+        #gameover button:hover {
+            background: #45a049;
+        }
+        
         .hidden {
             display: none;
         }
@@ -216,6 +283,13 @@
     <div id="canvas-container"></div>
     
     <div id="crosshair"></div>
+    
+    <!-- HUD -->
+    <div id="hud">
+        <div>PUNTOS: <span id="score">0</span></div>
+        <div id="timer">TIEMPO: 60s</div>
+    </div>
+    
     <div id="debug"></div>
     
     <button id="fullscreen-btn">Pantalla Completa</button>
@@ -232,13 +306,20 @@
     </div>
     
     <div id="instructions">
-        <h2>BIENVENIDO</h2>
-        <h2>JUEGO EJERCITO CELULAR</h2>
+        <h2>🎯 EJERCITO CELULAR 🎯</h2>
+        <p><strong>OBJETIVO:</strong> Destruye todos los objetivos</p>
+        <p><strong>TIEMPO:</strong> 1 minuto</p>
         <p><strong>PC:</strong> Teclado y Raton</p>
-        <p><strong>Móvil:</strong> Joystick y Botones</p>
-        <p><strong>FASE:</strong> PROTOTIPO 0.701</p>
-        <p><strong>“Prepárate para la batalla”</strong></p>
-        <button id="start-btn"> NUEVA PARTIDA</button>
+        <p><strong>Móvil:</strong> Joystick + Botones</p>
+        <p><strong>FASE:</strong> PROTOTIPO 0.8</p>
+        <button id="start-btn">🎮 COMENZAR MISIÓN</button>
+    </div>
+    
+    <div id="gameover" class="hidden">
+        <h1>🎯 MISIÓN COMPLETADA</h1>
+        <h2>PUNTUACIÓN FINAL: <span id="final-score">0</span></h2>
+        <p id="accuracy-text"></p>
+        <button id="restart-btn">🔄 NUEVA PARTIDA</button>
     </div>
 
     <script>
@@ -254,12 +335,21 @@
         let isPointerLocked = false;
         let isFullscreen = false;
         
+        // NUEVAS VARIABLES PARA TARGET PRACTICE
+        let targets = [];
+        let score = 0;
+        let timeLeft = 60;
+        let gameActive = false;
+        let gameTimer = null;
+        let shotsFired = 0;
+        let shotsHit = 0;
+        
         // Variables touch
         let touchStartX = 0, touchStartY = 0;
         let isTouchingScreen = false;
-        let cameraTouchId = null; // CORRECIO ESTA LÍNEA
+        let cameraTouchId = null;
         
-        // Joystick mejorado con tracking de touch
+        // Joystick
         let joystick = {
             active: false,
             touchId: null,
@@ -273,24 +363,19 @@
             inputY: 0
         };
 
-        // Configuración inicial
         function init() {
-            // Three.js Scene
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0x87CEEB);
-            scene.fog = new THREE.Fog(0x87CEEB, 0, 50);
+            scene.fog = new THREE.Fog(0x87CEEB, 0, 80);
 
-            // Camera
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
             camera.position.set(0, 1.6, 0);
 
-            // Renderer
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.shadowMap.enabled = true;
             document.getElementById('canvas-container').appendChild(renderer.domElement);
 
-            // Luz
             const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
             scene.add(ambientLight);
             const directionalLight = new THREE.DirectionalLight(0xffffff, 0.6);
@@ -298,13 +383,11 @@
             directionalLight.castShadow = true;
             scene.add(directionalLight);
 
-            // Cannon.js World
             world = new CANNON.World();
             world.gravity.set(0, -9.82, 0);
             world.broadphase = new CANNON.NaiveBroadphase();
             world.solver.iterations = 10;
 
-            // Suelo
             const groundGeometry = new THREE.PlaneGeometry(80, 80);
             const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x228B22 });
             const groundMesh = new THREE.Mesh(groundGeometry, groundMaterial);
@@ -318,7 +401,6 @@
             groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
             world.addBody(groundBody);
 
-            // Jugador
             const playerShape = new CANNON.Sphere(0.5);
             playerBody = new CANNON.Body({ mass: 80 });
             playerBody.addShape(playerShape);
@@ -326,91 +408,78 @@
             playerBody.linearDamping = 0.9;
             playerBody.fixedRotation = true;
             world.addBody(playerBody);
+            
+            //TEXTO 3D
+            const loader = new THREE.FontLoader();
+            loader.load(
+                'https://threejs.org/examples/fonts/helvetiker_regular.typeface.json',
+                function (font) {
+                    const palabra = "EJERCITO";
+                    const letras = [];
+                    const group = new THREE.Group();
 
-            // Cargar fuente DEL TEXTO 3D
-                        const loader = new THREE.FontLoader();
-                        loader.load(
-                        'https://threejs.org/examples/fonts/helvetiker_regular.typeface.json',
-                        function (font) {
+                    for (let i = 0; i < palabra.length; i++) {
+                        const char = palabra[i];
+                        const geometry = new THREE.TextGeometry(char, {
+                            font: font,
+                            size: 1,
+                            height: 0.3,
+                            curveSegments: 12,
+                            bevelEnabled: true,
+                            bevelThickness: 0.05,
+                            bevelSize: 0.02,
+                            bevelSegments: 5
+                        });
 
-                            const palabra = "EJERCITO";
-                            const letras = [];
-                            const group = new THREE.Group(); // Contendrá las letras
+                        geometry.center();
 
-                            // Crear cada letra como un Mesh independiente
-                            for (let i = 0; i < palabra.length; i++) {
-                            const char = palabra[i];
-                            const geometry = new THREE.TextGeometry(char, {
-                                font: font,
-                                size: 1,
-                                height: 0.3,
-                                curveSegments: 12,
-                                bevelEnabled: true,
-                                bevelThickness: 0.05,
-                                bevelSize: 0.02,
-                                bevelSegments: 5
-                            });
+                        const material = new THREE.MeshStandardMaterial({
+                            color: 0x0077ff,
+                            metalness: 0.2,
+                            roughness: 0.3
+                        });
 
-                            geometry.center(); // centra cada letra individualmente
+                        const mesh = new THREE.Mesh(geometry, material);
+                        mesh.position.x = i * 1.2;
+                        letras.push(mesh);
+                        group.add(mesh);
+                    }
 
-                            const material = new THREE.MeshStandardMaterial({
-                                color: 0x0077ff,
-                                metalness: 0.2,
-                                roughness: 0.3
-                            });
+                    group.position.x = -((palabra.length - 1) * 1.2) / 2;
+                    group.position.y = 0;
+                    
+                    const pivot = new THREE.Group();
+                    pivot.add(group);
+                    pivot.position.set(0, 3, -6);
+                    scene.add(pivot);
 
-                            const mesh = new THREE.Mesh(geometry, material);
-                            mesh.position.x = i * 1.2; // separación horizontal
-                            letras.push(mesh);
-                            group.add(mesh);
-                            }
+                    function animateText(time) {
+                        requestAnimationFrame(animateText);
+                        const t = time * 0.002;
 
-                            // ✅ Centrar el grupo visualmente en el eje X
-                            group.position.x = -((palabra.length - 1) * 1.2) / 2;
-                            group.position.y = 0;
-                            
-                            // ✅ Crear pivot centrado
-                            const pivot = new THREE.Group();
-                            pivot.add(group);
-                            pivot.position.set(0, 3, -6); // X, Y, Z del pivot
-                            scene.add(pivot);
+                        letras.forEach((letra, i) => {
+                            letra.position.y = Math.sin(t + i * 0.5) * 0.4;
+                            letra.rotation.y = Math.sin(t + i * 0.3) * 0.2;
+                        });
 
-                            // Animación del texto
-                            function animate(time) {
-                            requestAnimationFrame(animate);
-                            const t = time * 0.002; // velocidad del tiempo
+                        pivot.rotation.y += 0.0008;
+                        renderer.render(scene, camera);
+                    }
 
-                            // Movimiento tipo ola
-                            letras.forEach((letra, i) => {
-                                letra.position.y = Math.sin(t + i * 0.5) * 0.4;
-                                letra.rotation.y = Math.sin(t + i * 0.3) * 0.2;
-                            });
-
-                            // ✅ Rotar el pivot, no el grupo
-                            pivot.rotation.y += 0.0008;
-
-                            renderer.render(scene, camera);
-                            }
-
-                            animate();
-                        }
-                        );
-
-            // Cajas azules
+                    animateText();
+                }
+            );
+              // Cajas azules
             createBox(-5, 1, 2);
             createBox(5, 1, 4);
             createBox(0, 1, -8);
-            
-            // Objeto 3D con textura procedural
-            createCustomObject();
 
-            // Event listeners
             setupControls();
             updateJoystickCenter();
-            
             window.addEventListener('resize', onWindowResize);
         }
 
+// ✅ AGREGAR AQUÍ LA FUNCIÓN createBox
         function createBox(x, y, z) {
             const size = 1;
             const boxGeometry = new THREE.BoxGeometry(size, size, size);
@@ -428,118 +497,176 @@
 
             boxes.push({ mesh: boxMesh, body: boxBody });
         }
-        
-        function createCustomObject() {
-            const vertices = new Float32Array([
-                1.0, 0.9, -0.6, 1.0, -1.0, -0.6, -0.9, 0.9, -0.6,
-                -0.9, -1.0, -0.6, 0.6, 0.0, -0.01, 0.0, -0.5, 0.0,
-                0.1, 0.4, 0.0, -0.4, 0.0, 0.0, 1.0, 0.0, 0.4,
-                -0.1, -1.0, 0.4, -0.05, 1.1, 0.43, -1.2, 0.1, 0.4,
-                -0.3, 0.1, 0.8
-            ]);
+        // ✅ AGREGAR AQUÍ LA FUNCIÓN createBox
+        function createBox(x, y, z) {
+            const size = 1;
+            const boxGeometry = new THREE.BoxGeometry(size, size, size);
+            const boxMaterial = new THREE.MeshLambertMaterial({ color: 0x0000ff });
+            const boxMesh = new THREE.Mesh(boxGeometry, boxMaterial);
+            boxMesh.castShadow = true;
+            boxMesh.receiveShadow = true;
+            scene.add(boxMesh);
 
-            const indices = new Uint16Array([
-                0, 2, 6, 0, 6, 4, 1, 3, 2, 1, 2, 0,
-                6, 7, 11, 6, 11, 10, 3, 1, 5, 3, 5, 7,
-                2, 3, 7, 2, 7, 6, 1, 0, 4, 1, 4, 5,
-                8, 10, 12, 7, 5, 9, 7, 9, 11, 4, 6, 10,
-                4, 10, 8, 5, 4, 8, 5, 8, 9, 9, 8, 12,
-                10, 11, 12, 11, 9, 12
-            ]);
-            
-            const geometry = new THREE.BufferGeometry();
-            geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-            geometry.setIndex(new THREE.BufferAttribute(indices, 1));
-            geometry.computeVertexNormals();
-            
-            // Textura procedural
-            const textureSize = 256;
-            const canvas = document.createElement('canvas');
-            canvas.width = textureSize;
-            canvas.height = textureSize;
-            const ctx = canvas.getContext('2d');
-            const imageData = ctx.createImageData(textureSize, textureSize);
-            const data = imageData.data;
+            const boxShape = new CANNON.Box(new CANNON.Vec3(size / 2, size / 2, size / 2));
+            const boxBody = new CANNON.Body({ mass: 5 });
+            boxBody.addShape(boxShape);
+            boxBody.position.set(x, y, z);
+            world.addBody(boxBody);
 
-            function noise2D(x, y) {
-                const n1 = Math.sin(x * 0.1) * Math.cos(y * 0.1);
-                const n2 = Math.sin(x * 0.3 + y * 0.2) * 0.5;
-                const n3 = Math.sin(x * 0.7 - y * 0.5) * 0.25;
-                return n1 + n2 + n3;
-            }
-
-            for (let y = 0; y < textureSize; y++) {
-                for (let x = 0; x < textureSize; x++) {
-                    const i = (y * textureSize + x) * 4;
-                    const noise = noise2D(x, y) + (Math.random() - 0.5) * 0.15;
-                    const veinPattern = Math.abs(Math.sin(x * 0.15 + noise * 2)) * 
-                                        Math.abs(Math.cos(y * 0.12 + noise * 1.5));
-                    const veinDark = veinPattern < 0.3 ? -20 : 0;
-                    
-                    const r = Math.floor(200 + noise * 25 + veinDark);
-                    const g = Math.floor(30 + noise * 12 + veinDark * 0.5);
-                    const b = Math.floor(30 + noise * 8 + veinDark * 0.3);
-                    
-                    data[i] = Math.max(0, Math.min(255, r));
-                    data[i + 1] = Math.max(0, Math.min(255, g));
-                    data[i + 2] = Math.max(0, Math.min(255, b));
-                    data[i + 3] = 255;
-                }
-            }
-
-            ctx.putImageData(imageData, 0, 0);
-            const texture = new THREE.CanvasTexture(canvas);
-            texture.wrapS = THREE.RepeatWrapping;
-            texture.wrapT = THREE.RepeatWrapping;
-            texture.repeat.set(2, 2);
-
-            const material = new THREE.MeshPhongMaterial({
-                map: texture,
-                color: 0xffffff,
-                shininess: 80,
-                specular: 0xff9999,
-                emissive: 0x220000,
-                bumpMap: texture,
-                bumpScale: 0.05,
-                side: THREE.DoubleSide
-            });
-            
-            const mesh = new THREE.Mesh(geometry, material);
-            mesh.position.set(-3, 2, 0);
-            mesh.castShadow = true;
-            mesh.receiveShadow = true;
-            scene.add(mesh);
-
-            // Física con caja aproximada
-            const boxShape = new CANNON.Box(new CANNON.Vec3(0.6, 1, 0.5));
-            const body = new CANNON.Body({ mass: 5 });
-            body.addShape(boxShape);
-            body.position.set(-3, 2, 0);
-            world.addBody(body);
-            boxes.push({ mesh: mesh, body: body });
+            boxes.push({ mesh: boxMesh, body: boxBody });
         }
 
+
+        
+        // CREAR OBJETIVOS
+        function spawnTarget() {
+            if (!gameActive) return;
+            
+            const x = (Math.random() - 0.5) * 30;
+            const y = 3 + Math.random() * 4;
+            const z = -5 - Math.random() * 20;
+            
+            const geo = new THREE.SphereGeometry(0.6, 32, 32);
+            const mat = new THREE.MeshLambertMaterial({ 
+                color: 0xff0000,
+                emissive: 0x330000
+            });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.set(x, y, z);
+            mesh.castShadow = true;
+            scene.add(mesh);
+            
+            targets.push({
+                mesh: mesh,
+                startTime: Date.now(),
+                startPos: { x, y, z },
+                moveSpeed: 0.5 + Math.random() * 0.5,
+                movePattern: Math.floor(Math.random() * 3),
+                hit: false
+            });
+        }
+
+        // ACTUALIZAR MOVIMIENTO DE OBJETIVOS
+        function updateTargets() {
+            const currentTime = Date.now();
+            
+            targets.forEach(target => {
+                const elapsed = (currentTime - target.startTime) * 0.001;
+                
+                switch(target.movePattern) {
+                    case 0:
+                        target.mesh.position.x = target.startPos.x + Math.sin(elapsed * target.moveSpeed) * 3;
+                        break;
+                    case 1:
+                        target.mesh.position.y = target.startPos.y + Math.sin(elapsed * target.moveSpeed) * 2;
+                        break;
+                    case 2:
+                        target.mesh.position.x = target.startPos.x + Math.sin(elapsed * target.moveSpeed) * 3;
+                        target.mesh.position.y = target.startPos.y + Math.cos(elapsed * target.moveSpeed) * 2;
+                        break;
+                }
+                
+                target.mesh.rotation.y += 0.02;
+            });
+        }
+
+        // DETECTAR COLISIÓN BALA-OBJETIVO
+        function checkBulletCollisions() {
+            spheres.forEach(bullet => {
+                targets.forEach((target, index) => {
+                    if (target.hit) return;
+                    
+                    const distance = bullet.mesh.position.distanceTo(target.mesh.position);
+                    
+                    if (distance < 0.8) {
+                        target.hit = true;
+                        target.mesh.material.color.setHex(0x00ff00);
+                        
+                        setTimeout(() => {
+                            scene.remove(target.mesh);
+                            targets.splice(index, 1);
+                        }, 100);
+                        
+                        score += 10;
+                        shotsHit++;
+                        updateHUD();
+                        
+                        setTimeout(() => spawnTarget(), 1000);
+                    }
+                });
+            });
+        }
+
+        // INICIAR JUEGO
+        function startGameLogic() {
+            gameActive = true;
+            score = 0;
+            timeLeft = 60;
+            shotsFired = 0;
+            shotsHit = 0;
+            
+            targets.forEach(t => scene.remove(t.mesh));
+            targets = [];
+            
+            for (let i = 0; i < 5; i++) {
+                setTimeout(() => spawnTarget(), i * 500);
+            }
+            
+            gameTimer = setInterval(() => {
+                timeLeft--;
+                updateHUD();
+                
+                if (timeLeft <= 0) {
+                    endGame();
+                }
+            }, 1000);
+            
+            updateHUD();
+        }
+
+        // TERMINAR JUEGO
+        function endGame() {
+            gameActive = false;
+            clearInterval(gameTimer);
+            
+            const accuracy = shotsFired > 0 ? ((shotsHit / shotsFired) * 100).toFixed(1) : 0;
+            
+            document.getElementById('final-score').textContent = score;
+            document.getElementById('accuracy-text').textContent = 
+                `Disparos: ${shotsFired} | Aciertos: ${shotsHit} | Precisión: ${accuracy}%`;
+            document.getElementById('gameover').classList.remove('hidden');
+            
+            targets.forEach(t => scene.remove(t.mesh));
+            targets = [];
+        }
+
+        // ACTUALIZAR HUD
+        function updateHUD() {
+            document.getElementById('score').textContent = score;
+            document.getElementById('timer').textContent = `TIEMPO: ${timeLeft}s`;
+        }
+
+        // RESTART
+        function restartGame() {
+            document.getElementById('gameover').classList.add('hidden');
+            startGameLogic();
+        }
+       
         function setupControls() {
-            // Teclado
             document.addEventListener('keydown', onKeyDown);
             document.addEventListener('keyup', onKeyUp);
-            
-            // Mouse
             document.addEventListener('mousemove', onMouseMove);
             
-            // Joystick
             setupJoystick();
             
-            // Touch en canvas (para mirar alrededor)
             const canvas = renderer.domElement;
             canvas.addEventListener('touchstart', (e) => {
-            //  Recorrer todos los touches nuevos
                 for (let i = 0; i < e.touches.length; i++) {
                     const touch = e.touches[i];
                     
                     if (touch.clientX > window.innerWidth / 2 && !isTouchingScreen) {
                         isTouchingScreen = true;
-                        cameraTouchId = touch.identifier; // ← Guardar ID
+                        cameraTouchId = touch.identifier;
                         touchStartX = touch.clientX;
                         touchStartY = touch.clientY;
                         break;
@@ -548,44 +675,40 @@
             });
             
             canvas.addEventListener('touchmove', (e) => {
-            if (isTouchingScreen) {
-                e.preventDefault();
-                
-                // ✅ Buscar el touch correcto por ID
-                for (let i = 0; i < e.touches.length; i++) {
-                    const touch = e.touches[i];
+                if (isTouchingScreen) {
+                    e.preventDefault();
+                    
+                    for (let i = 0; i < e.touches.length; i++) {
+                        const touch = e.touches[i];
+                        
+                        if (touch.identifier === cameraTouchId) {
+                            const deltaX = touch.clientX - touchStartX;
+                            const deltaY = touch.clientY - touchStartY;
+                            
+                            yaw -= deltaX * 0.005;
+                            pitch -= deltaY * 0.005;
+                            pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
+                            
+                            touchStartX = touch.clientX;
+                            touchStartY = touch.clientY;
+                            break;
+                        }
+                    }
+                }
+            });
+            
+            canvas.addEventListener('touchend', (e) => {
+                for (let i = 0; i < e.changedTouches.length; i++) {
+                    const touch = e.changedTouches[i];
                     
                     if (touch.identifier === cameraTouchId) {
-                        const deltaX = touch.clientX - touchStartX;
-                        const deltaY = touch.clientY - touchStartY;
-                        
-                        yaw -= deltaX * 0.005;
-                        pitch -= deltaY * 0.005;
-                        pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
-                        
-                        touchStartX = touch.clientX;
-                        touchStartY = touch.clientY;
+                        isTouchingScreen = false;
+                        cameraTouchId = null;
                         break;
                     }
                 }
-            }
-        });
-            //
-            canvas.addEventListener('touchend', (e) => {
-            // ✅ Verificar si se soltó el touch de la cámara
-            for (let i = 0; i < e.changedTouches.length; i++) {
-                const touch = e.changedTouches[i];
-                
-                if (touch.identifier === cameraTouchId) {
-                    isTouchingScreen = false;
-                    cameraTouchId = null;
-                    break;
-                }
-            }
-        });
+            });
             
-            
-            // Botones
             document.getElementById('btn-jump').addEventListener('touchstart', (e) => {
                 e.preventDefault();
                 jump();
@@ -597,6 +720,7 @@
             });
             
             document.getElementById('start-btn').addEventListener('click', startGame);
+            document.getElementById('restart-btn').addEventListener('click', restartGame);
             document.getElementById('fullscreen-btn').addEventListener('click', toggleFullscreen);
             
             document.addEventListener('fullscreenchange', onFullscreenChange);
@@ -652,7 +776,6 @@
                 resetJoystick();
             }, { passive: false });
             
-            // Mouse para PC
             joystickContainer.addEventListener('mousedown', (e) => {
                 joystick.active = true;
                 joystickStick.classList.add('active');
@@ -735,12 +858,12 @@
         function updateDebug() {
             const debug = document.getElementById('debug');
             debug.innerHTML = `
-                JUEGO: EJERCITO CELULAR
-                Joystick: ${joystick.active ? 'ENCENDIDO' : 'APAGADO'}<br>
+                🎯 TARGET PRACTICE<br>
+                Joy: ${joystick.active ? 'ON' : 'OFF'}<br>
                 X: ${joystick.inputX.toFixed(2)}<br>
                 Y: ${joystick.inputY.toFixed(2)}<br>
-                Posicion: ${playerBody.position.x.toFixed(1)}, ${playerBody.position.y.toFixed(1)}, ${playerBody.position.z.toFixed(1)}<br>
-                Saltar: ${canJump}<br>
+                Pos: ${playerBody.position.x.toFixed(1)}, ${playerBody.position.z.toFixed(1)}<br>
+                Targets: ${targets.length}<br>
                 Balas: ${spheres.length}
             `;
         }
@@ -757,6 +880,8 @@
             document.addEventListener('webkitpointerlockchange', onPointerLockChange);
             
             renderer.domElement.addEventListener('click', onShoot);
+            
+            startGameLogic();
         }
 
         function onPointerLockChange() {
@@ -777,6 +902,8 @@
         }
 
         function onShoot() {
+            shotsFired++;
+            
             const sphereGeometry = new THREE.SphereGeometry(0.2, 16, 16);
             const sphereMaterial = new THREE.MeshLambertMaterial({ color: 0xffff00 });
             const sphereMesh = new THREE.Mesh(sphereGeometry, sphereMaterial);
@@ -863,15 +990,13 @@
             const speed = 5;
             const direction = new THREE.Vector3();
             
-            // Teclado
             if (keys['KeyW']) direction.z -= 1;
             if (keys['KeyS']) direction.z += 1;
             if (keys['KeyA']) direction.x -= 1;
             if (keys['KeyD']) direction.x += 1;
 
-            // Joystick (invertido el eje Y para movimiento correcto)
             direction.x += joystick.inputX;
-            direction.z += joystick.inputY; // Joystick hacia abajo = mover adelante
+            direction.z += joystick.inputY;
 
             if (direction.length() > 0) {
                 direction.normalize();
@@ -883,7 +1008,6 @@
                 playerBody.velocity.z *= 0.9;
             }
 
-            // Detección de suelo para saltar
             const contactNormal = new CANNON.Vec3();
             const upAxis = new CANNON.Vec3(0, 1, 0);
             canJump = false;
@@ -901,7 +1025,6 @@
                 }
             });
 
-            // Actualizar cámara
             camera.position.copy(playerBody.position);
             camera.quaternion.setFromEuler(new THREE.Euler(pitch, yaw, 0, 'YXZ'));
         }
@@ -913,14 +1036,14 @@
             world.step(deltaTime);
 
             updatePlayer(deltaTime);
+            updateTargets();
+            checkBulletCollisions();
 
-            // Actualizar cajas
             boxes.forEach(box => {
                 box.mesh.position.copy(box.body.position);
                 box.mesh.quaternion.copy(box.body.quaternion);
             });
 
-            // Actualizar esferas y eliminar las antiguas
             spheres = spheres.filter(sphere => {
                 sphere.mesh.position.copy(sphere.body.position);
                 sphere.mesh.quaternion.copy(sphere.body.quaternion);
@@ -937,7 +1060,6 @@
             renderer.render(scene, camera);
         }
 
-        // Iniciar
         init();
         animate();
     </script>
