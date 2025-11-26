@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>EJERCITO CELULAR </title>
+    <title>EJERCITO CELULAR - Target Practice</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
     <style>
@@ -287,7 +287,7 @@
     <!-- HUD -->
     <div id="hud">
         <div>PUNTOS: <span id="score">0</span></div>
-        <div id="timer">TIEMPO: 60s</div>
+        <div id="timer">TIEMPO: 180s</div>
     </div>
     
     <div id="debug"></div>
@@ -306,17 +306,18 @@
     </div>
     
     <div id="instructions">
-        <h2>🎯 EJERCITO CELULAR 🎯</h2>
+        <h2>🎯 TARGET PRACTICE 🎯</h2>
+        <h2>EJERCITO CELULAR</h2>
         <p><strong>OBJETIVO:</strong> Destruye todos los objetivos</p>
-        <p><strong>TIEMPO:</strong> 1 minuto</p>
-        <p><strong>PC:</strong> Teclado y Raton</p>
+        <p><strong>TIEMPO:</strong> 3 minutos</p>
+        <p><strong>PC:</strong> WASD + Mouse + Clic</p>
         <p><strong>Móvil:</strong> Joystick + Botones</p>
         <p><strong>FASE:</strong> PROTOTIPO 0.8</p>
         <button id="start-btn">🎮 COMENZAR MISIÓN</button>
     </div>
     
     <div id="gameover" class="hidden">
-        <h1>🎯 MISIÓN COMPLETADA</h1>
+        <h1>🎯 MISIÓN COMPLETADA 🎯</h1>
         <h2>PUNTUACIÓN FINAL: <span id="final-score">0</span></h2>
         <p id="accuracy-text"></p>
         <button id="restart-btn">🔄 NUEVA PARTIDA</button>
@@ -338,7 +339,7 @@
         // NUEVAS VARIABLES PARA TARGET PRACTICE
         let targets = [];
         let score = 0;
-        let timeLeft = 60;
+        let timeLeft = 180;
         let gameActive = false;
         let gameTimer = null;
         let shotsFired = 0;
@@ -375,26 +376,62 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.shadowMap.enabled = true;
             document.getElementById('canvas-container').appendChild(renderer.domElement);
-
+            //crear luces
             const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
             scene.add(ambientLight);
             const directionalLight = new THREE.DirectionalLight(0xffffff, 0.6);
             directionalLight.position.set(10, 20, 10);
             directionalLight.castShadow = true;
             scene.add(directionalLight);
+            // ✅ CARGAR TEXTURAS PBR
+            const textureLoader = new THREE.TextureLoader();
 
+            const grassBaseColor = textureLoader.load('Poliigon_GrassPatchyGround_4585_BaseColor.jpg');
+            const grassNormal = textureLoader.load('Poliigon_GrassPatchyGround_4585_Normal.png');
+            const grassAO = textureLoader.load('Poliigon_GrassPatchyGround_4585_AmbientOcclusion.jpg');
+
+            // ✅ CONFIGURAR REPETICIÓN (para que no se vea estirado en 80x80m)
+            const repeatCount = 20; // Ajusta según prefieras
+            grassBaseColor.wrapS = grassBaseColor.wrapT = THREE.RepeatWrapping;
+            grassNormal.wrapS = grassNormal.wrapT = THREE.RepeatWrapping;
+            grassAO.wrapS = grassAO.wrapT = THREE.RepeatWrapping;
+
+            grassBaseColor.repeat.set(repeatCount, repeatCount);
+            grassNormal.repeat.set(repeatCount, repeatCount);
+            grassAO.repeat.set(repeatCount, repeatCount);
+
+            // ✅ OPTIMIZAR FILTROS PARA MÓVIL
+            grassBaseColor.anisotropy = 4; // Mejora calidad en ángulo
+            grassNormal.anisotropy = 4;
+            grassAO.anisotropy = 4;
+
+            // 🔥 CREAR SUELO CON TEXTURAS PBR
             world = new CANNON.World();
             world.gravity.set(0, -9.82, 0);
             world.broadphase = new CANNON.NaiveBroadphase();
             world.solver.iterations = 10;
 
             const groundGeometry = new THREE.PlaneGeometry(80, 80);
-            const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x228B22 });
+
+            // 🎨 USAR MeshStandardMaterial CON TEXTURAS
+            const groundMaterial = new THREE.MeshStandardMaterial({
+                map: grassBaseColor,           // Color base
+                normalMap: grassNormal,        // Relieve/detalle
+                aoMap: grassAO,                // Sombras en grietas
+                aoMapIntensity: 0.5,           // Intensidad de sombras (ajustable)
+                roughness: 0.9,                // Pasto es áspero
+                metalness: 0.0                 // Pasto no es metálico
+            });
+
             const groundMesh = new THREE.Mesh(groundGeometry, groundMaterial);
             groundMesh.rotation.x = -Math.PI / 2;
             groundMesh.receiveShadow = true;
+
+           // ⚠️ IMPORTANTE: Para que funcione aoMap, necesitas UV2
+            groundGeometry.attributes.uv2 = groundGeometry.attributes.uv;
             scene.add(groundMesh);
 
+            //FISICAS DEL SUELO
             const groundShape = new CANNON.Plane();
             groundBody = new CANNON.Body({ mass: 0 });
             groundBody.addShape(groundShape);
@@ -408,8 +445,7 @@
             playerBody.linearDamping = 0.9;
             playerBody.fixedRotation = true;
             world.addBody(playerBody);
-            
-            //TEXTO 3D
+
             const loader = new THREE.FontLoader();
             loader.load(
                 'https://threejs.org/examples/fonts/helvetiker_regular.typeface.json',
@@ -469,17 +505,23 @@
                     animateText();
                 }
             );
-              // Cajas azules
+
+            // Cajas azules con física
             createBox(-5, 1, 2);
             createBox(5, 1, 4);
             createBox(0, 1, -8);
+
+            // Crear plataforma móvil
+            createMovingPlatform();
+            // Crear campo de pasto 3D
+            createGrassField();  
 
             setupControls();
             updateJoystickCenter();
             window.addEventListener('resize', onWindowResize);
         }
 
-// ✅ AGREGAR AQUÍ LA FUNCIÓN createBox
+        // CREAR CAJAS CON FÍSICA
         function createBox(x, y, z) {
             const size = 1;
             const boxGeometry = new THREE.BoxGeometry(size, size, size);
@@ -497,33 +539,150 @@
 
             boxes.push({ mesh: boxMesh, body: boxBody });
         }
-        // ✅ AGREGAR AQUÍ LA FUNCIÓN createBox
-        function createBox(x, y, z) {
-            const size = 1;
-            const boxGeometry = new THREE.BoxGeometry(size, size, size);
-            const boxMaterial = new THREE.MeshLambertMaterial({ color: 0x0000ff });
-            const boxMesh = new THREE.Mesh(boxGeometry, boxMaterial);
-            boxMesh.castShadow = true;
-            boxMesh.receiveShadow = true;
-            scene.add(boxMesh);
-
-            const boxShape = new CANNON.Box(new CANNON.Vec3(size / 2, size / 2, size / 2));
-            const boxBody = new CANNON.Body({ mass: 5 });
-            boxBody.addShape(boxShape);
-            boxBody.position.set(x, y, z);
-            world.addBody(boxBody);
-
-            boxes.push({ mesh: boxMesh, body: boxBody });
+        // CREAR PLATAFORMA MÓVIL
+        function createMovingPlatform() {
+            const width = 3;
+            const height = 0.3;
+            const depth = 3;
+            
+            // Mesh visual
+            const platformGeometry = new THREE.BoxGeometry(width, height, depth);
+            const platformMaterial = new THREE.MeshLambertMaterial({ 
+                color: 0xff6600,
+                emissive: 0x331100
+            });
+            const platformMesh = new THREE.Mesh(platformGeometry, platformMaterial);
+            platformMesh.castShadow = true;
+            platformMesh.receiveShadow = true;
+            platformMesh.position.set(0, 1, 2);
+            scene.add(platformMesh);
+            
+            // Cuerpo físico KINEMATIC (mass: 0 y type: KINEMATIC)
+            const platformShape = new CANNON.Box(new CANNON.Vec3(width / 2, height / 2, depth / 2));
+            const platformBody = new CANNON.Body({ 
+                mass: 0,
+                type: CANNON.Body.KINEMATIC
+            });
+            platformBody.addShape(platformShape);
+            platformBody.position.set(0, 1, 2);
+            world.addBody(platformBody);
+            
+            platform = {
+                mesh: platformMesh,
+                body: platformBody,
+                startY: 1,
+                endY: 3,
+                currentState: 'down',
+                stateStartTime: Date.now()
+            };
+            
+            platformStartTime = Date.now();
         }
-
-
+// ✅ AGREGAR TODA ESTA FUNCIÓN AQUÍ:
+    // CREAR CAMPO DE PASTO 3D CON INSTANCED MESH
+    function createGrassField() {
+         // ✅ CARGAR TEXTURA PNG
+        const textureLoader = new THREE.TextureLoader();
+        const grassTexture = textureLoader.load('gras-A1-.png');
         
+        // ✅ Configurar textura
+        grassTexture.magFilter = THREE.LinearFilter;
+        grassTexture.minFilter = THREE.LinearMipmapLinearFilter;
+        
+        // Geometría de una brizna (MÁS PEQUEÑA)
+        const bladeGeometry = new THREE.PlaneGeometry(0.2, 0.25);
+        
+        // ✅ Material CON TEXTURA y TRANSPARENCIA
+        const grassMaterial = new THREE.MeshLambertMaterial({
+            map: grassTexture,              // ← Usar textura
+            transparent: true,               // ← Activar transparencia
+            alphaTest: 0.5,                 // ← Cortar píxeles casi transparentes
+            side: THREE.DoubleSide,
+            depthWrite: true
+        });
+        
+        // Crear 3000 briznas instanciadas
+        const grassCount = 20000;
+        const instancedGrass = new THREE.InstancedMesh(
+            bladeGeometry, 
+            grassMaterial, 
+            grassCount
+        );
+        
+        instancedGrass.castShadow = true;
+        instancedGrass.receiveShadow = true;
+        
+        const dummy = new THREE.Object3D();
+        const dummy2 = new THREE.Object3D();
+
+        // 🔥 REDUCIR ÁREA (de 70x70 a 50x50 o menos)
+        const fieldSize = 50;  // ← Ajusta según tu necesidad
+
+        // Colocar briznas aleatoriamente
+        for (let i = 0; i < grassCount / 2; i++) {
+            const x = (Math.random() - 0.5) * 70;
+            const z = (Math.random() - 0.5) * 70;
+            
+            // Primera brizna
+            dummy.position.set(x, 0.12, z);
+            dummy.rotation.y = Math.random() * Math.PI;
+            dummy.scale.set(
+                0.8 + Math.random() * 0.6,
+                0.8 + Math.random() * 0.6,
+                1
+            );
+            dummy.updateMatrix();
+            instancedGrass.setMatrixAt(i * 2, dummy.matrix);
+            
+            // Segunda brizna cruzada
+            dummy2.position.set(x, 0.12, z);
+            dummy2.rotation.y = (Math.random() * Math.PI) + Math.PI / 2;
+            dummy2.scale.set(
+                0.8 + Math.random() * 0.6,
+                0.8 + Math.random() * 0.6,
+                1
+            );
+            dummy2.updateMatrix();
+            instancedGrass.setMatrixAt(i * 2 + 1, dummy2.matrix);
+        }
+        
+        
+        
+        scene.add(instancedGrass);
+        
+        console.log(`✅ Pasto creado: ${grassCount} briznas`);
+    }
+            
+        // ACTUALIZAR POSICIÓN DE LA PLATAFORMA
+        function updatePlatform() {
+            if (!platform) return;
+            
+            const currentTime = Date.now();
+            const elapsed = (currentTime - platform.stateStartTime) / 1000;
+            
+            if (elapsed >= 10) {
+                platform.currentState = platform.currentState === 'down' ? 'up' : 'down';
+                platform.stateStartTime = currentTime;
+            }
+            
+            const targetY = platform.currentState === 'down' ? platform.startY : platform.endY;
+            const lerpSpeed = 0.05;
+            const currentY = platform.body.position.y;
+            const newY = currentY + (targetY - currentY) * lerpSpeed;
+            
+            platform.body.position.y = newY;
+            platform.body.velocity.y = 0;
+            
+            platform.mesh.position.copy(platform.body.position);
+            platform.mesh.quaternion.copy(platform.body.quaternion);
+        }
+
         // CREAR OBJETIVOS
         function spawnTarget() {
             if (!gameActive) return;
             
             const x = (Math.random() - 0.5) * 30;
-            const y = 3 + Math.random() * 4;
+            const y = 2 + Math.random() * 4;
             const z = -5 - Math.random() * 20;
             
             const geo = new THREE.SphereGeometry(0.6, 32, 32);
@@ -601,7 +760,7 @@
         function startGameLogic() {
             gameActive = true;
             score = 0;
-            timeLeft = 60;
+            timeLeft = 180;
             shotsFired = 0;
             shotsHit = 0;
             
@@ -651,7 +810,7 @@
             document.getElementById('gameover').classList.add('hidden');
             startGameLogic();
         }
-       
+
         function setupControls() {
             document.addEventListener('keydown', onKeyDown);
             document.addEventListener('keyup', onKeyUp);
