@@ -6,6 +6,7 @@
     <title>EJERCITO CELULAR - Target Practice</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
     <style>
         * {
             margin: 0;
@@ -330,6 +331,7 @@
     </div>
 
     <script>
+        
         // Variables globales
         let scene, camera, renderer, world;
         let playerBody, groundBody;
@@ -344,6 +346,9 @@
         let platform = null;
         let platformStartTime = 0;
         let platformActive = false;  // ← NUEVA variable para activar/desactivar
+        let enemies = []; // Array de enemigos
+        let mixer = null;
+        let animationMixers = []; // Un mixer por cada Kratos
         
         // NUEVAS VARIABLES PARA TARGET PRACTICE
         let targets = [];
@@ -587,7 +592,203 @@
             
             platformStartTime = Date.now();
         }
-// ✅ AGREGAR TODA ESTA FUNCIÓN AQUÍ:
+
+        // Función para crear un Kratos enemigo
+        function spawnKratos(x, y, z) {
+            console.log('🔄 Intentando cargar Kratos...');
+            
+            if (typeof THREE.GLTFLoader === 'undefined') {
+                console.error('❌ GLTFLoader NO está disponible');
+                return;
+            }
+            
+            const loader = new THREE.GLTFLoader();
+            const kratosURL = 'https://gametechnologymath.github.io/kratos.glb';
+            
+            loader.load(
+                kratosURL,
+                (gltf) => {
+                    console.log('✅ Kratos cargado!');
+                    
+                    const kratos = gltf.scene;
+                    kratos.scale.set(1, 1, 1);
+                    kratos.position.set(x, y, z);
+                    scene.add(kratos);
+                    
+                    const mixer = new THREE.AnimationMixer(kratos);
+                    animationMixers.push(mixer);
+                    
+                    const animations = {};
+                    
+                    // ✅ USAR LA ANIMACIÓN ÚNICA CON DIFERENTES VELOCIDADES
+                    if (gltf.animations.length > 0) {
+                        const mainClip = gltf.animations[0];
+                        console.log(`📽️ Usando: ${mainClip.name} (${mainClip.duration}s)`);
+                        
+                        animations.idle = mixer.clipAction(mainClip.clone());
+                        animations.idle.timeScale = 0.8; // MUY lento
+                        
+                        animations.run = mixer.clipAction(mainClip.clone());
+                        animations.run.timeScale = 1.5; // Rápido
+                        
+                        animations.attack = mixer.clipAction(mainClip.clone());
+                        animations.attack.timeScale = 2.0;
+                        
+                        animations.death = mixer.clipAction(mainClip.clone());
+                        animations.death.timeScale = 2.0;
+                        animations.death.setLoop(THREE.LoopOnce);
+                        animations.death.clampWhenFinished = true;
+                    }
+                    
+                    const enemyShape = new CANNON.Sphere(1);
+                    const enemyBody = new CANNON.Body({ 
+                        mass: 80,
+                        fixedRotation: true 
+                    });
+                    enemyBody.addShape(enemyShape);
+                    enemyBody.position.set(x, y, z);
+                    world.addBody(enemyBody);
+                    
+                    const enemy = {
+                        mesh: kratos,
+                        body: enemyBody,
+                        mixer: mixer,
+                        animations: animations,
+                        currentAction: null,
+                        health: 100,
+                        state: 'idle',
+                        attackRange: 3,
+                        chaseRange: 20,
+                        attackCooldown: 0,
+                        damage: 10
+                    };
+                    
+                    enemies.push(enemy);
+                    
+                    if (animations.idle) {
+                        playEnemyAnimation(enemy, 'idle');
+                    }
+                    
+                    console.log('✅ Kratos spawneado, enemigos:', enemies.length);
+                },
+                undefined,
+                (error) => {
+                    console.error('❌ ERROR:', error);
+                }
+            );
+        }
+        // Reproducir animación de enemigo
+        function playEnemyAnimation(enemy, animName, loop = true) {
+            if (!enemy.animations[animName]) {
+                console.warn(`⚠️ Animación "${animName}" no encontrada`);
+                return;
+            }
+            
+            const action = enemy.animations[animName];
+            
+            // Detener animación anterior
+            if (enemy.currentAction && enemy.currentAction !== action) {
+                enemy.currentAction.stop();  // ← Usar stop() en vez de fadeOut()
+            }
+            
+            // ✅ CONFIGURAR Y REPRODUCIR
+            action.reset();
+            action.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce);
+            action.clampWhenFinished = !loop; // Mantener último frame si no hace loop
+            action.enabled = true;
+            action.setEffectiveTimeScale(1.0); // Asegurar que el timeScale esté activo
+            action.setEffectiveWeight(1.0);
+            action.play();
+            
+            enemy.currentAction = action;
+            
+            console.log(`🎬 Reproduciendo: ${animName} (timeScale: ${action.timeScale})`);
+        }
+
+        // Actualizar enemigos cada frame
+        function updateEnemies(deltaTime) {
+            enemies.forEach(enemy => {
+                if (enemy.health <= 0) {
+                    if (enemy.state !== 'dead') {
+                        enemy.state = 'dead';
+                        playEnemyAnimation(enemy, 'death', false);
+                        
+                        // Eliminar después de 3 segundos
+                        setTimeout(() => {
+                            scene.remove(enemy.mesh);
+                            world.removeBody(enemy.body);
+                            enemies = enemies.filter(e => e !== enemy);
+                        }, 3000);
+                    }
+                    return;
+                }
+                
+                // Actualizar mixer de animación
+                enemy.mixer.update(deltaTime);
+                
+                // Calcular distancia al jugador
+                const dx = playerBody.position.x - enemy.body.position.x;
+                const dz = playerBody.position.z - enemy.body.position.z;
+                const distance = Math.sqrt(dx * dx + dz * dz);
+                
+                
+                // COMPORTAMIENTO SEGÚN DISTANCIA
+                if (distance < enemy.attackRange) {
+                    // ⚔️ ATACAR
+                    if (enemy.state !== 'attacking') {
+                        enemy.state = 'attacking';
+                        playEnemyAnimation(enemy, 'attack', false);
+                        console.log('⚔️ Estado: ATTACK');
+                    }
+                    
+                    enemy.body.velocity.x = 0;
+                    enemy.body.velocity.z = 0;
+                    
+                    // Dar daño cada 2 segundos
+                    enemy.attackCooldown -= deltaTime;
+                    if (enemy.attackCooldown <= 0) {
+                        console.log('💥 Kratos te atacó! -' + enemy.damage + ' HP');
+                        enemy.attackCooldown = 2;
+                    }
+                    
+                } else if (distance < enemy.chaseRange) {
+                    // 🏃 PERSEGUIR
+                    if (enemy.state !== 'chasing') {
+                        enemy.state = 'chasing';
+                        playEnemyAnimation(enemy, 'run');
+                        console.log('🏃 Estado: RUN');
+                    }
+                    
+                    // Moverse hacia el jugador
+                    const speed = 3;
+                    const dirX = dx / distance;
+                    const dirZ = dz / distance;
+                    
+                    enemy.body.velocity.x = dirX * speed;
+                    enemy.body.velocity.z = dirZ * speed;
+                    
+                    // Rotar hacia el jugador
+                    const angle = Math.atan2(dx, dz);
+                    enemy.mesh.rotation.y = angle;
+                    
+                } else {
+                    // 🧍 IDLE
+                    if (enemy.state !== 'idle') {
+                        enemy.state = 'idle';
+                        playEnemyAnimation(enemy, 'idle');
+                        console.log('🧍 Estado: IDLE');
+                    }
+                    
+                    enemy.body.velocity.x = 0;
+                    enemy.body.velocity.z = 0;
+                }
+                
+                // Sincronizar mesh con física
+                enemy.mesh.position.copy(enemy.body.position);
+                enemy.mesh.position.y -= 1; // Ajuste para que los pies toquen el suelo
+            });
+        }
+    // ✅ AGREGAR TODA ESTA FUNCIÓN AQUÍ:
     // CREAR CAMPO DE PASTO 3D CON INSTANCED MESH
     function createGrassField() {
          // ✅ CARGAR TEXTURA PNG
@@ -748,9 +949,11 @@
             });
         }
 
+        
         // DETECTAR COLISIÓN BALA-OBJETIVO
         function checkBulletCollisions() {
             spheres.forEach(bullet => {
+                // Colisión con targets
                 targets.forEach((target, index) => {
                     if (target.hit) return;
                     
@@ -772,35 +975,98 @@
                         setTimeout(() => spawnTarget(), 1000);
                     }
                 });
-            });
+                
+                // ✅ Colisión con enemigos (DENTRO del spheres.forEach)
+                enemies.forEach(enemy => {
+                    if (enemy.health <= 0) return;
+                    
+                    const distance = bullet.mesh.position.distanceTo(enemy.body.position);
+                    
+                    if (distance < 1) {
+                        enemy.health -= 25;
+                        
+                        // Efecto visual de impacto
+                        enemy.mesh.traverse((child) => {
+                            if (child.isMesh && child.material) {
+                                const originalColor = child.material.color.clone();
+                                child.material.color.setHex(0xff0000);
+                                setTimeout(() => {
+                                    child.material.color.copy(originalColor);
+                                }, 100);
+                            }
+                        });
+                        
+                        // Empuje
+                        const pushX = (enemy.body.position.x - bullet.body.position.x) * 5;
+                        const pushZ = (enemy.body.position.z - bullet.body.position.z) * 5;
+                        enemy.body.velocity.x += pushX;
+                        enemy.body.velocity.z += pushZ;
+                        
+                        console.log('🎯 Hit! Kratos HP:', enemy.health);
+                        
+                        if (enemy.health <= 0) {
+                            score += 50;
+                            shotsHit++;
+                            updateHUD();
+                        }
+                    }
+                });
+            }); // ← Cierre del spheres.forEach (solo UNO)
         }
 
-        // INICIAR JUEGO
-        function startGameLogic() {
-            gameActive = true;
-            score = 0;
-            timeLeft = 180;
-            shotsFired = 0;
-            shotsHit = 0;
-            
-            targets.forEach(t => scene.remove(t.mesh));
-            targets = [];
-            
-            for (let i = 0; i < 5; i++) {
-                setTimeout(() => spawnTarget(), i * 500);
-            }
-            
-            gameTimer = setInterval(() => {
-                timeLeft--;
-                updateHUD();
-                
-                if (timeLeft <= 0) {
-                    endGame();
+                // INICIAR JUEGO
+                function startGameLogic() {
+                    gameActive = true;
+                    score = 0;
+                    timeLeft = 180;
+                    shotsFired = 0;
+                    shotsHit = 0;
+                    
+                    targets.forEach(t => scene.remove(t.mesh));
+                    targets = [];
+                // ✅ Mostrar mensaje de carga
+                    const loadingMsg = document.createElement('div');
+                    loadingMsg.id = 'loading-msg';
+                    loadingMsg.style.cssText = `
+                        position: fixed;
+                        top: 50%;
+                        left: 50%;
+                        transform: translate(-50%, -50%);
+                        background: rgba(0,0,0,0.9);
+                        color: white;
+                        padding: 20px 40px;
+                        border-radius: 10px;
+                        font-size: 24px;
+                        z-index: 9999;
+                    `;
+                    loadingMsg.textContent = '⏳ Cargando enemigos...';
+                    document.body.appendChild(loadingMsg);
+                    
+                    // Ocultar después de 5 segundos
+                    setTimeout(() => {
+                        if (document.getElementById('loading-msg')) {
+                            document.getElementById('loading-msg').remove();
+                        }
+                    }, 5000);
+                    
+                    for (let i = 0; i < 5; i++) {
+                        setTimeout(() => spawnTarget(), i * 500);
+                    }
+                    
+                  gameTimer = setInterval(() => {
+                        timeLeft--;
+                        updateHUD();
+                        if (timeLeft <= 0) endGame();
+                    }, 1000);
+                    
+                    updateHUD();
+                    // ✅ AGREGAR ENEMIGOS AL FINAL:
+                    setTimeout(() => {
+                        spawnKratos(-10, 0.5, -10);
+                        spawnKratos(10, 0.5, -15);
+                        spawnKratos(0, 0.5, -20);
+                    }, 2000);
                 }
-            }, 1000);
-            
-            updateHUD();
-        }
 
         // TERMINAR JUEGO
         function endGame() {
@@ -1227,6 +1493,7 @@
             updatePlayer(deltaTime);
             updatePlatform();        // ← ✅ AGREGAR ESTA LÍNEA
             updateTargets();
+            updateEnemies(deltaTime); // ← ✅ AGREGAR ESTA LÍNEA
             checkBulletCollisions();
 
             boxes.forEach(box => {
